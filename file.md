@@ -1098,7 +1098,7 @@ No such provider: JTLS
 ## dk17 для офлайн запуска jar файла без установки jdk
 
 
-### Вариант 1: Portable JDK 17 для Windows (рекомендую)
+### 📦 Вариант 1: Portable JDK 17 для Windows (рекомендую)
 OpenJDK Temurin Portable Legacy 17 — полностью портативная версия, не требующая установки и прав администратора.
 
 Как использовать:
