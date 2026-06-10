@@ -1,3 +1,4 @@
+## продолжение программы
 Файл: `java/src/main/java/ru/fedsfm/rfm/storage/RegistryStateStore.java`
 
 Зачем: файловое хранилище состояния downloads/state.properties. Это позволяет не скачивать один и тот же реестр повторно.
@@ -439,6 +440,7 @@ java/logs/rfm-client.log
 Если сертификат ГОСТ и обычный Java TLS не сможет с ним договориться, следующий шаг будет не переписывание архитектуры, а подключение CryptoPro JCP/JTLS provider в RfmHttpClientFactory. Архитектура выше для этого уже нормальная: менять придётся только слой `cert/client`, не весь проект.
 
 ## Подключение CryptoPro JCP/JTLS
+
 ```text
 напиши на пока подключение CryptoPro чтобы была альтернатива
 ```
@@ -1091,3 +1093,82 @@ No such provider: JTLS
 "KeyStoreProvider": ""
 ```
 Например для некоторых установок CryptoPro может понадобиться не Windows store, а CryptoPro key store. Архитектурно мы это уже предусмотрели через `KeyStoreType` и `KeyStoreProvider`.
+
+
+## dk17 для офлайн запуска jar файла без установки jdk
+
+
+### Вариант 1: Portable JDK 17 для Windows (рекомендую)
+OpenJDK Temurin Portable Legacy 17 — полностью портативная версия, не требующая установки и прав администратора.
+
+Как использовать:
+1. Скачайте портативную версию с [PortableApps.com](https://portableapps.com/):
+  - [OpenJDK Temurin Portable Legacy 17](https://portableapps.com/apps/utilities/OpenJDK) (150 MB download / 284 MB installed)
+2. Распакуйте в любую папку (например, D:\Portable\OpenJDK17)
+3. Запустите JAR-файл двумя способами:
+
+Способ A — через командную строку:
+
+```cmd
+D:\Portable\OpenJDK17\bin\java.exe -jar ваш_файл.jar
+```
+Способ B — ассоциировать .jar с портативной Java:
+
+- Утилита `jPortable Launcher` автоматически настроит запуск JAR-файлов через портативную Java
+
+### 🐧 Вариант 2: Для Linux (включая Ubuntu, Debian, CentOS)
+Скачивание:
+1. OpenJDK (Eclipse Temurin): [adoptium.net](https://adoptium.net/zh-CN/temurin/releases/?version=17)
+2. Oracle JDK: [oracle.com](https://www.oracle.com/java/technologies/javase/jdk17-archive-downloads.html)
+
+Выбирайте `tar.gz` архив под вашу архитектуру (x64 или ARM/aarch64).
+
+Установка без инсталляции:
+```bash
+# 1. Создайте директорию (например, рядом с JAR-файлом)
+mkdir ~/java17
+
+# 2. Распакуйте архив
+tar -xzf openjdk-17*.tar.gz -C ~/java17 --strip-components=1
+
+# 3. Запустите JAR-файл
+~/java17/bin/java -jar ваш_файл.jar
+```
+(Опционально) Добавьте в PATH временно:
+```bash
+export JAVA_HOME=~/java17
+export PATH=$JAVA_HOME/bin:$PATH
+```
+Теперь можно просто выполнять `java -jar ваш_файл.jar` из этой сессии терминала.
+
+### 🍎 Вариант 3: Для macOS
+1. Скачайте tar.gz архив с [Adoptium](https://adoptium.net/zh-CN/temurin/releases/?version=17) (выберите macOS)
+2. Распакуйте в удобное место:
+
+```bash
+tar -xzf OpenJDK17U-jdk_x64_mac_hotspot_17.0.7_7.tar.gz -C ~/java17
+```
+3. Запустите:
+
+```bash
+~/java17/Contents/Home/bin/java -jar ваш_файл.jar
+```
+### 📋 Важный момент: JDK vs JRE
+Для запуска JAR-файлов достаточно JRE (Java Runtime Environment), который меньше по размеру.
+
+- JRE Portable (~70-80 MB): только для запуска готовых программ
+- JDK Portable (~150-300 MB): включает компилятор и инструменты разработки
+
+Если вы не планируете компилировать Java-код, возьмите OpenJDK JRE Portable Legacy 17 — он легче.
+
+### 🚀 Автоматический запуск (batch-скрипт для Windows)
+Сохраните как `run.bat` рядом с вашим JAR-файлом:
+
+```batch
+@echo off
+set JAVA_HOME=%~dp0OpenJDK17
+set PATH=%JAVA_HOME%\bin;%PATH%
+java -jar ваш_файл.jar
+pause
+```
+Просто поместите папку OpenJDK17 с распакованной JDK в ту же директорию, что и скрипт — всё будет работать автономно без системной установки.
