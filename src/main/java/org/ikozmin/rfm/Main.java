@@ -1,77 +1,160 @@
 package org.ikozmin.rfm;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.ikozmin.rfm.cert.CertificateLoader;
+import org.ikozmin.rfm.cert.ClientCertificate;
+import org.ikozmin.rfm.client.RfmApiClient;
+import org.ikozmin.rfm.client.RfmEndpoints;
+import org.ikozmin.rfm.client.RfmHttpClientFactory;
+import org.ikozmin.rfm.config.AppConfig;
+import org.ikozmin.rfm.config.ConfigLoader;
+import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.rfm.nodel.CatalogType;
+import org.ikozmin.rfm.service.RegistryUpdateService;
+import org.ikozmin.rfm.service.UpdateResult;
+import org.ikozmin.rfm.storage.RegistryStateStore;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509ExtendedKeyManager;
-import java.io.File;
-import java.io.IOException;
-import java.net.Socket;
-import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.KeyStore;
-import java.security.Principal;
-import java.security.PrivateKey;
-import java.security.SecureRandom;
-import java.security.cert.Certificate;
-import java.security.cert.X509Certificate;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.Enumeration;
-import java.util.Locale;
-import java.util.Properties;
 
 public final class Main {
-    private static final String BASE_URL = "https://portal.fedsfm.ru:8081/Services/fedsfm-service";
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
 
-    public static void main(String[] args) throws Exception {
-        Cli cli = Cli.parse(args);
+    public static void main(String[] args) {
+        try {
+            new Main().run(args);
+        } catch (Exception e) {
+            log.error("Ошибка при выполнении программы: {}", e.getMessage(), e);
+            System.err.println("Ошибка при выполнении программы: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private void run(String[] args) throws Exception {
+        Cli cli = new Cli(args);
 
         Path configPath = cli.configPath != null ? cli.configPath : Path.of("..", "config.json");
         Path outputDir = cli.outputDir != null ? cli.outputDir : Path.of("downloads");
-        boolean prod = cli.prod;
-        Catalog catalog = cli.catalog != null ? Catalog.from(cli.catalog) : Catalog.TE21;
 
         Files.createDirectories(outputDir);
 
-        Config config = Config.load(configPath);
+        ConfigLoader configLoader = new ConfigLoader();
+        AppConfig config = configLoader.load(configPath);
 
-        System.out.println("Config: " + configPath.toAbsolutePath());
-        System.out.println("Contour: " + (prod ? "prod" : "test"));
-        System.out.println("Catalog: " + catalog.code);
+        boolean production = cli.production != null ? cli.production : !config.isUseTestContour();
 
-        KeyStore keyStore = KeyStore.getInstance("Windows-MY");
-        keyStore.load(null, null);
+        CatalogType catalogType = cli.catalog != null
+            ? CatalogType.from(cli.catalog)
+            : CatalogType.from(configLoader.defaultCatalog(config));
 
-        String certificateAlias = findCertificateAlias(keyStore, config.certificateSerialNumber);
-        System.out.println("Certificate found: " + certificateAlias);
+        log.info("Запуск программы");
+        log.info("Путь к конфигу: {}", configPath.toAbsolutePath());
+        log.info("Каталог для выгрузки: {}", outputDir.toAbsolutePath());
+        log.info("Контур: {}", production ? "prod" : "test");
+        log.info("Каталог: {}", catalogType.getCode());
+        log.info("Серийный номер сертификата: {}", Masking.serial(configLoader.certificateSerial(config)));
 
-        HttpClient httpClient = createHttpClient(keyStore, certificateAlias);
-        Endpoint endpoints = Endpoints.create(prod, catalog);
+        ClientCertificate certificate = new CertificateLoader()
+            .loadFromWindowsMy(configLoader.certificateSerial(config));
 
-        Stringtoken = authenticate(httpClient, endpoints.authenticateUrl, config.userName, config.password);
-        System.out.println("Authentication: OK");
+        HttpClient httpClient = new RfmHttpClientFactory().create(certificate);
 
-        CatalogInfo remoteCatalog = getCatalog(httpClient, endpoints.catalogUrl, token);
-        System.out.println("Remote date: " + remoteCatalog.date);
-        System.out.println("Remote idXml: " + remoteCatalog.idXml);
+        RfmApiClient apiClient = new RfmApiClient(
+            httpClient,
+            new RfmEndpoints(production)
+        );
 
-        Path statePath = outputDir.resolve("state.properties");
-        Properties state = loadState(statePath);
+        apiClient.authenticate(
+            configLoader.userName(config),
+            configLoader.password(config)
+        );
 
-        String
+        RegistryUpdateService updateService = new RegistryUpdateService(
+            apiClient,
+            new RegistryStateStore(outputDir.resolve("state.properties")),
+            outputDir
+        );
+
+        UpdateResult result = updateService.update(catalogType);
+
+        if (result.isDownloaded()) {
+            log.info("Update result: downloaded. idXml={}, file={}", result.getIdXml(), result.getFile);
+            System.out.println("UPDATED " + result.getFile().toAbsolutePath());
+        } else {
+            log.info("Update result: no updates. idXml={}, file={}", result.getIdXml(), result.getFile);
+            System.out.println("NO_UPDATES " + catalogType.getCode() + " " + result.getIdXml);
+
+            if (result.getFile() != null) {
+                System.out.println("CURRENT_FILE " + result.getFile().toAbsolutePath());
+            }
+        }
     }
 
+    private static final class Cli {
+        private path configPath;
+        private Path outputDir;
+        private Styring catalog;
+        private Boolean production;
+
+        private static Cli parse(String[] args) {
+            Cli cli = new Cli();
+
+            for (int i = 0; i < args.length; i++) {
+                String arg = args[i];
+
+                switch (arg) {
+                    case "-c":
+                    case "--config":
+                        cli.configPath = Path.of(requireValue(args, ++i, arg));
+                        break;
+                    case "-o":
+                    case "--out":
+                        cli.outputDir = Path.of(requireValue(args, ++i, arg));
+                        break;
+                    case "-k":
+                    case "--catalog":
+                        cli.catalog = requireValue(args, ++i, arg);
+                        break;
+                    case "--prod":
+                        cli.production = true;
+                        break;
+                    case "--test":
+                        cli.production = false;
+                        break;
+                    case "-h":
+                    case "--help":
+                        printHelpAndExit();
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unknown argument: " + arg);
+                }
+            }
+
+            return cli;
+        }
+
+        private static String requireValue(String[] args, int index, String option) {
+            if (index >= args.length || args[index].startsWith("-")) {
+                throw new IllegalArgumentException("Missing value for " + option);
+            }
+
+            return args[index];
+        }
+
+        private static void printHelpAndExit() {
+            System.out.println("Usage:");
+            System.out.println("  java -jar target/rfm-client-1.0.0.jar [options]");
+            System.out.println();
+            System.out.println("Options:");
+            System.out.println("  -c, --config <path>    Path to config.json. Default: ../config.json");
+            System.out.println("  -o, --out <dir>        Output directory. Default: downloads");
+            System.out.println("  -k, --catalog <code>   te2, te21, mvk, un, un-rus");
+            System.out.println("      --prod             Use production contour");
+            System.out.println("      --test             Use test contour");
+            System.out.println("  -h, --help             Show help");
+            System.exit(0);
+        }
+    }
 }
