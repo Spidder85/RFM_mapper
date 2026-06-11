@@ -10,7 +10,7 @@ import org.ikozmin.rfm.client.RfmHttpClientFactory;
 import org.ikozmin.rfm.config.AppConfig;
 import org.ikozmin.rfm.config.ConfigLoader;
 import org.ikozmin.rfm.logging.Masking;
-import org.ikozmin.rfm.nodel.CatalogType;
+import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.service.RegistryUpdateService;
 import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
