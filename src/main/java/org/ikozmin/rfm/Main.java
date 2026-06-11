@@ -1,7 +1,9 @@
 package org.ikozmin.rfm;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.net.http.HttpClient;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 import org.ikozmin.rfm.cert.CertificateLoader;
 import org.ikozmin.rfm.cert.ClientCertificate;
 import org.ikozmin.rfm.client.RfmApiClient;
@@ -14,10 +16,8 @@ import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.service.RegistryUpdateService;
 import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
-
-import java.net.http.HttpClient;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class Main {
     private static final Logger log = LoggerFactory.getLogger(Main.class);
@@ -33,7 +33,7 @@ public final class Main {
     }
 
     private void run(String[] args) throws Exception {
-        Cli cli = new Cli(args);
+        Cli cli = Cli.parse(args);
 
         Path configPath = cli.configPath != null ? cli.configPath : Path.of("..", "config.json");
         Path outputDir = cli.outputDir != null ? cli.outputDir : Path.of("downloads");
@@ -80,11 +80,11 @@ public final class Main {
         UpdateResult result = updateService.update(catalogType);
 
         if (result.isDownloaded()) {
-            log.info("Update result: downloaded. idXml={}, file={}", result.getIdXml(), result.getFile);
+            log.info("Update result: downloaded. idXml={}, file={}", result.getIdXml(), result.getFile());
             System.out.println("UPDATED " + result.getFile().toAbsolutePath());
         } else {
-            log.info("Update result: no updates. idXml={}, file={}", result.getIdXml(), result.getFile);
-            System.out.println("NO_UPDATES " + catalogType.getCode() + " " + result.getIdXml);
+            log.info("Update result: no updates. idXml={}, file={}", result.getIdXml(), result.getFile());
+            System.out.println("NO_UPDATES " + catalogType.getCode() + " " + result.getIdXml());
 
             if (result.getFile() != null) {
                 System.out.println("CURRENT_FILE " + result.getFile().toAbsolutePath());

@@ -1,13 +1,13 @@
 package org.ikozmin.rfm.storage;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.ikozmin.rfm.model.CatalogType;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Properties;
+
+import org.ikozmin.rfm.model.CatalogType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class RegistryStateStore {
     private static final Logger log = LoggerFactory.getLogger(RegistryStateStore.class);
@@ -89,4 +89,5 @@ public final class RegistryStateStore {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
 }

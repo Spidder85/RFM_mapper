@@ -2,21 +2,21 @@ package org.ikozmin.rfm.service;
 
 // Бизнес-логика проверки обновления и скачивания. API-клиент не знает про state и файлы, storage не знает про HTTP.
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.ikozmin.rfm.client.RfmApiClient;
-import org.ikozmin.rfm.model.CatalogInfo;
-import org.ikozmin.rfm.model.CatalogType;
-import org.ikozmin.rfm.storage.RegistryState;
-import org.ikozmin.rfm.storage.RegistryStateStore;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
+import org.ikozmin.rfm.client.RfmApiClient;
+import org.ikozmin.rfm.model.CatalogInfo;
+import org.ikozmin.rfm.model.CatalogType;
+import org.ikozmin.rfm.storage.RegistryState;
+import org.ikozmin.rfm.storage.RegistryStateStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public final class RegistryUpdateService {
-    private static final Loggger log = LoggerFactory.getLogger(RegistryUpdateService.class);
+    private static final Logger log = LoggerFactory.getLogger(RegistryUpdateService.class);
 
     private final RfmApiClient apiClient;
     private final RegistryStateStore stateStore;
@@ -35,8 +35,8 @@ public final class RegistryUpdateService {
     public UpdateResult update(CatalogType catalogType) {
         log.info("Проверка обновлений реестра. catalog={}", catalogType.getCode());
 
-        CatalogInfo remoteCatalog = apiClient.getCatalogInfo(catalogType);
-        String remoteIdXml = remoteCatalog.requiredIdXml();
+        CatalogInfo remoteCatalog = apiClient.getCatalog(catalogType);
+        String remoteIdXml = remoteCatalog.requireIdXml();
 
         RegistryState currentState = stateStore.load(catalogType);
 
@@ -78,7 +78,7 @@ public final class RegistryUpdateService {
             Path catalogDir = outputDir.resolve(catalogType.getCode());
             Files.createDirectories(catalogDir);
 
-            Path target = catalogDir.resolve(buildFileName(catalogInfo, catalogInfo));
+            Path target = catalogDir.resolve(buildFileName(catalogType, catalogInfo));
             Files.write(target, fileBytes);
 
             log.info("Файл реестра сохранен. path={}, bytes={}", target.toAbsolutePath(), fileBytes.length);
@@ -93,7 +93,7 @@ public final class RegistryUpdateService {
         String date = catalogInfo.effectiveDate();
 
         if (date == null || date.trim().isEmpty()) {
-            date = LocalDateTime.now()format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            date = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         }
 
         String safeDate = date.replaceAll("[^0-9A-Za-z]+", "");
@@ -106,6 +106,6 @@ public final class RegistryUpdateService {
             + "_"
             + shortId
             + "."
-            + catalogType.getFileExtension();
+            + catalogType.getExtension();
     }
 }
