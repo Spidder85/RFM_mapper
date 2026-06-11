@@ -93,9 +93,9 @@ public final class Main {
     }
 
     private static final class Cli {
-        private path configPath;
+        private Path configPath;
         private Path outputDir;
-        private Styring catalog;
+        private String catalog;
         private Boolean production;
 
         private static Cli parse(String[] args) {
