@@ -185,3 +185,5 @@ __screenshots__/
 build/
 tasks/
 target/
+
+#config.json

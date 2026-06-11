@@ -62,7 +62,7 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>ru.fedsfm.rfm.Main</mainClass>
+                                    <mainClass>org.ikozmin.rfm.Main</mainClass>
                                 </transformer>
                             </transformers>
                         </configuration>
