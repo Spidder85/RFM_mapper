@@ -186,4 +186,5 @@ build/
 tasks/
 target/
 
-#config.json
+config.json
+*.cer
