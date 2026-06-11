@@ -49,6 +49,44 @@ public final class RegistryStateStore {
     }
 
     public void save(CatalogType catalogType, RegistryState state) {
+        try {
+            Files.createDirectories(path.toAbsolutePath().getParent());
 
+            Properties properties = loadProperties();
+            String prefix = catalogType.getCode() + ".";
+
+            properties.setProperty(prefix + "idXml", nullToEmpty(state.getIdXml()));
+            properties.setProperty(prefix + "date", nullToEmpty(state.getDate()));
+            properties.setProperty(prefix + "file", nullToEmpty(state.getFile()));
+            properties.setProperty(prefix + "downloadedAt", nullToEmpty(state.getDownloadedAt()));
+
+            try (var output = Files.newOutputStream(path)) {
+                properties.store(output, "RFM registry state");
+            }
+
+            log.info("Local state saved. catalog={}, idXml={}, file={}",
+                catalogType.getCode(),
+                state.getIdXml(),
+                state.getFile());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to save registry state: " + path.toAbsolutePath(), e);
+        }
     }
+
+    private Properties loadProperties() throws IOException {
+        Properties properties = new Properties();
+
+        if (!Files.exists(path)) {
+            return properties;
+        }
+
+        try (var input = Files.newInputStream(path)) {
+            properties.load(input);
+        }
+
+        return properties;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
 }
