@@ -1,0 +1,20 @@
+{
+    "Credentials": {
+        "UserName": "[введите имя пользователя]",
+        "Password": "[введите пароль]"
+    },
+    "Certificate": {
+    "SerialNumber": "[введите серийный номер сертификата]",
+    "StoreLocation": "CurrentUser",
+    "StoreName": "My",
+    "CertFilePath": null,
+    "CertPfxPath": null,
+    "CertPfxPassword": ""
+  },
+  "Logging": {
+    "LogFileName": "rfm_client.log",
+    "LogLevel": "INFO"
+  },
+  "DefaultCatalog": "te2",
+  "UseTestContour": false
+}

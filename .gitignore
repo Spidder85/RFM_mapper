@@ -185,6 +185,7 @@ __screenshots__/
 build/
 tasks/
 target/
+logs/
 
 config.json
 *.cer
