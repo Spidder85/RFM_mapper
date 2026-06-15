@@ -181,6 +181,7 @@ __screenshots__/
 
 .vscode/
 .gigaide/
+.gigacode/
 .idea/
 build/
 tasks/
