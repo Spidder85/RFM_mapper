@@ -380,7 +380,7 @@ ContentType: application/json
 
 ContentType: multipart/form-data
 
-{ file: binary, sign: binary, mchd: list<&lt;>binary&gt;, mchdSign: list&lt;binary&gt; }
+{ file: binary, sign: binary, mchd: list&lt;binary&gt;, mchdSign: list&lt;binary&gt; }
 
 **Структура ответа:**
 
@@ -811,8 +811,8 @@ ContentType: application/octet-stream
 **Запрос**
 ```json
 {
-  "file": &lt;binary data&gt;,
-  "sign": &lt;binary data&gt;
+  "file": <binary data>,
+  "sign": <binary data>
 }
 ```
 **Ответ**
@@ -830,10 +830,10 @@ ContentType: application/octet-stream
 **Запрос**
 ```json
 {
-  "file": &lt;binary data&gt;,
-  "sign": &lt;binary data&gt;,
-  "mchd": list&lt;binary data&gt;,
-  "mchdSign": list&lt;binary data&gt;
+  "file": <binary data>,
+  "sign": <binary data>,
+  "mchd": list<binary data>,
+  "mchdSign": list<binary data>
 }
 ```
 **Ответ**
@@ -984,8 +984,8 @@ ContentType: application/octet-stream
 **Запрос**
 ```json
 {
-  "file": &lt;binary data&gt;,
-  "sign": &lt;binary data&gt;
+  "file": <binary data>,
+  "sign": <binary data>
 }
 ```
 **Ответ**
