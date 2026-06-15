@@ -190,3 +190,4 @@ logs/
 
 config.json
 *.cer
+*.pfx
