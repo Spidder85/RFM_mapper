@@ -58,41 +58,9 @@ public final class CryptoProCertificateLoader {
     }
 
     private String findAliasBySerial(KeyStore keyStore, String serialNumber) throws Exception {
-        // String expected = normalizeSerial(serialNumber);
-
-        // Enumeration<String> aliases = keyStore.aliases();
-        // while (aliases.hasMoreElements()) {
-        //     String alias = aliases.nextElement();
-        //     Certificate certificate = keyStore.getCertificate(alias);
-
-        //     if (!(certificate instanceof X509Certificate x509)) {
-        //         continue;
-        //     }
-
-        //     // Правильное получение серийного номера через байты
-        //     byte[] bytes = x509.getSerialNumber().toByteArray();
-        //     StringBuilder hex = new StringBuilder();
-        //     for (byte b : bytes) {
-        //         hex.append(String.format("%02x", b & 0xFF));
-        //     }
-
-        //     String actual = normalizeSerial(x509.getSerialNumber().toString(16));
-
-        //     if (actual.equals(expected)) {
-        //         if (!keyStore.isKeyEntry(alias)) {
-        //             throw new RfmCertificateException("Certificate found, but private key is unavailable. Alias: " + alias);
-        //         }
-
-        //         return alias;
-        //     }
-        // }
-
-        // throw new RfmCertificateException(
-        //         "Certificate not found in CryptoPro key store. Serial: " + Masking.serial(serialNumber)
-        // );
         // Ожидаемый серийный номер (убираем пробелы)
         String expected = serialNumber.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
-        log.debug("Looking for serial: {}", expected);
+        log.debug("Looking for serial: {}", Masking.serial(expected));
         
         Enumeration<String> aliases = keyStore.aliases();
         while (aliases.hasMoreElements()) {
@@ -113,7 +81,11 @@ public final class CryptoProCertificateLoader {
             }
             String serialBytes = hexBytes.toString();
             
-            log.debug("Comparing - expected: {}, hex: {}, bytes: {}", expected, serialHex, serialBytes);
+            log.debug("Comparing - expected: {}, hex: {}, bytes: {}",
+                    Masking.serial(expected),
+                    Masking.serial(serialHex),
+                    Masking.serial(serialBytes)
+            );
             
             // Сравниваем в разных форматах
             if (serialHex.equals(expected) || serialBytes.equals(expected)) {
@@ -125,18 +97,6 @@ public final class CryptoProCertificateLoader {
         }
         
         throw new RfmCertificateException("Certificate not found in CryptoPro key store. Serial: " + Masking.serial(serialNumber));
-    }
-
-    private String normalizeSerial(String value) {
-        if (value == null) {
-            return "";
-        }
-
-        return value
-            .replace(" ", "")
-            .replace(":", "")
-            .replace("-", "")
-            .toLowerCase(Locale.ROOT);
     }
 
     private static String valueOrDefault(String value, String defaultValue) {

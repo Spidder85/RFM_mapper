@@ -10,6 +10,7 @@ import org.ikozmin.rfm.model.AuthRequest;
 import org.ikozmin.rfm.model.AuthResponse;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
+import org.ikozmin.rfm.logging.Masking;
 
 import java.io.IOException;
 import java.net.URI;
@@ -45,7 +46,7 @@ public final class RfmApiClient {
         String url = endpoints.authenticateUrl();
 
         try {
-            log.info("Authenticating user {}", userName);
+            log.info("Authenticating user {}", Masking.userName(userName));
 
             AuthRequest authRequest = new AuthRequest(userName, password);
             String requestBody = objectMapper.writeValueAsString(authRequest);
@@ -118,7 +119,7 @@ public final class RfmApiClient {
 
             log.info("Catalog received. type={}, idXml={}, date={}, active={}",
                     catalogType.getCode(),
-                    idXml,
+                    Masking.id(idXml),
                     catalogInfo.effectiveDate(),
                     catalogInfo.getIsActive());
 
@@ -137,7 +138,11 @@ public final class RfmApiClient {
         String url = endpoints.fileUrl(catalogType);
 
         try {
-            log.info("Downloading catalog file. type={}, idXml={}, url={}", catalogType.getCode(), idXml, url);
+            log.info("Downloading catalog file. type={}, idXml={}, url={}",
+                    catalogType.getCode(),
+                    Masking.id(idXml),
+                    url
+            );
 
             Files.createDirectories(tempFile.toAbsolutePath().getParent());
 
@@ -171,7 +176,7 @@ public final class RfmApiClient {
 
             log.info("Catalog file downloaded. type={}, idXml={}, path={}, bytes={}, contentType={}",
                     catalogType.getCode(),
-                    idXml,
+                    Masking.id(idXml),
                     response.body().toAbsolutePath(),
                     size,
                     contentType);

@@ -180,15 +180,12 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 
-.vscode/
-.gigaide/
 .gigacode/
-.idea/
-build/
-tasks/
-target/
-logs/
 
 config.json
 *.cer
 *.pfx
+*.p12
+logs/
+downloads/
+target/

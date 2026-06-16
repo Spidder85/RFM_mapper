@@ -28,8 +28,8 @@ public final class Main {
         try {
             new Main().run(args);
         } catch (Exception e) {
-            log.error("Ошибка при выполнении программы: {}", e.getMessage(), e);
-            System.err.println("Ошибка при выполнении программы: " + e.getMessage());
+            log.error("Application failed: {}", e.getMessage(), e);
+            System.err.println("Application failed: " + e.getMessage());
             System.exit(1);
         }
     }
@@ -53,12 +53,12 @@ public final class Main {
             ? CatalogType.from(cli.catalog)
             : CatalogType.from(configLoader.defaultCatalog(config));
 
-        log.info("Запуск программы");
-        log.info("Путь к конфигу: {}", configPath.toAbsolutePath());
-        log.info("Каталог для выгрузки: {}", outputDir.toAbsolutePath());
+        log.info("Application starte");
+        log.info("Config path: {}", configPath.toAbsolutePath());
+        log.info("Output directory: {}", outputDir.toAbsolutePath());
         log.info("Contour: {}", contour);
-        log.info("Каталог: {}", catalogType.getCode());
-        log.info("Серийный номер сертификата: {}", Masking.serial(configLoader.certificateSerial(config)));
+        log.info("Catalog: {}", catalogType.getCode());
+        log.info("Certificate serial:: {}", Masking.serial(configLoader.certificateSerial(config)));
 
         ClientCertificate certificate;
         

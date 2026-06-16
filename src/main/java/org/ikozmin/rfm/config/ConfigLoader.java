@@ -25,7 +25,7 @@ public final class ConfigLoader {
             validate(config);
 
             log.info("Config loaded: {}", path.toAbsolutePath());
-            log.info("Config userName: {}", userName(config));
+            log.info("Config userName: {}", Masking.userName(userName(config)));
             log.info("Config certificate serial: {}", Masking.serial(certificateSerial(config)));
             log.info("Config default catalog: {}", defaultCatalog(config));
             log.info("Config contour: {}", config.isUseTestContour() ? "test" : "prod");
@@ -50,7 +50,7 @@ public final class ConfigLoader {
 
     public String defaultCatalog(AppConfig config) {
         String value = config.getDefaultCatalog();
-        return isBlank(value) ? "te21" :value;
+        return isBlank(value) ? "te21" : value;
     }
 
     private void validate(AppConfig config) {

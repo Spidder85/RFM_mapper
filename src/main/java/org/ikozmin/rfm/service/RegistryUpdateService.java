@@ -13,6 +13,7 @@ import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.storage.RegistryState;
 import org.ikozmin.rfm.storage.RegistryStateStore;
+import org.ikozmin.rfm.logging.Masking;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +35,7 @@ public final class RegistryUpdateService {
     }
 
     public UpdateResult update(CatalogType catalogType) {
-        log.info("Проверка обновлений реестра. catalog={}", catalogType.getCode());
+        log.info("Checking registry update. catalog={}", catalogType.getCode());
 
         CatalogInfo remoteCatalog = apiClient.getCatalog(catalogType);
         String remoteIdXml = remoteCatalog.requireIdXml();
@@ -42,7 +43,10 @@ public final class RegistryUpdateService {
         RegistryState currentState = stateStore.load(catalogType);
 
         if (currentState != null && remoteIdXml.equalsIgnoreCase(currentState.getIdXml())) {
-            log.info("Реестр актуален. catalog={}, idXml={}", catalogType.getCode(), remoteIdXml);
+            log.info("Registry is actual. catalog={}, idXml={}",
+                    catalogType.getCode(),
+                    Masking.id(remoteIdXml)
+            );
 
             Path currentFile = currentState.getFile() == null || currentState.getFile().trim().isEmpty()
                 ? null
@@ -51,10 +55,10 @@ public final class RegistryUpdateService {
             return new UpdateResult(false, remoteIdXml, currentFile);
         }
 
-        log.info("Обнаружено обновление реестра. catalog={}, oldIdXml={}, newIdXml={}",
+        log.info("Registry update detected. catalog={}, oldIdXml={}, newIdXml={}",
             catalogType.getCode(),
-            currentState == null ? "<none>" : currentState.getIdXml(),
-            remoteIdXml
+            currentState == null ? "<none>" : Masking.id(currentState.getIdXml()),
+            Masking.id(remoteIdXml)
         );
 
         Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, remoteIdXml);
@@ -68,7 +72,10 @@ public final class RegistryUpdateService {
 
         stateStore.save(catalogType, newState);
 
-        log.info("Обновление реестра завершено. catalog={}, file={}", catalogType.getCode(), savedFile.toAbsolutePath());
+        log.info("Registry update completed. catalog={}, file={}",
+                catalogType.getCode(),
+                savedFile.toAbsolutePath()
+        );
 
         return new UpdateResult(true, remoteIdXml, savedFile);
     }
