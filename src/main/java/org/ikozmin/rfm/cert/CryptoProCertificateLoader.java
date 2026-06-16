@@ -26,7 +26,7 @@ public final class CryptoProCertificateLoader {
 
             String keyStoreType = valueOrDefault(
                 cryptoPro == null ? null : cryptoPro.getKeyStoreType(),
-                "Windows-MY"
+                "HDImageStore"  // JCP 2.0 использует HDImageStore
             );
 
             String keyStoreProvider = trimToNull(
@@ -65,7 +65,13 @@ public final class CryptoProCertificateLoader {
                 continue;
             }
 
-            // X509Certificate x509 = (X509Certificate) certificate;
+            // Правильное получение серийного номера через байты
+            byte[] bytes = x509.getSerialNumber().toByteArray();
+            StringBuilder hex = new StringBuilder();
+            for (byte b : bytes) {
+                hex.append(String.format("%02x", b & 0xFF));
+            }
+
             String actual = normalizeSerial(x509.getSerialNumber().toString(16));
 
             if (actual.equals(expected)) {

@@ -17,7 +17,7 @@
             "ru.CryptoPro.Crypto.CryptoProvider",
             "ru.CryptoPro.ssl.Provider"
         ],
-        "KeyStoreType": "Windows-MY",
+        "KeyStoreType": "HDImageStore",
         "SslProtocol": "GostTLS",
         "SslProvider": "JTLS"
     }

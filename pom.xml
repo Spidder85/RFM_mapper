@@ -38,6 +38,42 @@
             <artifactId>logback-classic</artifactId>
             <version>${logback.version}</version>
         </dependency>
+
+        <!-- Основной провайдер JCP -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp</artifactId>
+            <version>2.0.47159-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCP.jar</systemPath>
+        </dependency>
+
+        <!-- Работа с ASN.1 -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>asn1p</artifactId>
+            <version>2.0.47159-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/ASN1P.jar</systemPath>
+        </dependency>
+
+        <!-- Проверка отозванных сертификатов -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-rev-check</artifactId>
+            <version>2.0.47159-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCPRevCheck.jar</systemPath>
+        </dependency>
+        
+        <!-- Работа с хранилищами (опционально, но может понадобиться) -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-control-pane</artifactId>
+            <version>2.0.47159-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCPControlPane.jar</systemPath>
+        </dependency>
     </dependencies>
 
     <build>
