@@ -8,30 +8,34 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-import org.ikozmin.rfm.client.RfmApiClient;
+import org.ikozmin.rfm.client.RfmClient;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.storage.RegistryState;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.rfm.storage.Sha256;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class RegistryUpdateService {
     private static final Logger log = LoggerFactory.getLogger(RegistryUpdateService.class);
 
-    private final RfmApiClient apiClient;
+    private final RfmClient apiClient;
     private final RegistryStateStore stateStore;
     private final Path outputDir;
 
+    private final DownloadRequestIdResolver downloadRequestIdResolver;
+
     public RegistryUpdateService(
-        RfmApiClient apiClient,
+        RfmClient apiClient,
         RegistryStateStore stateStore,
         Path outputDir
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
         this.outputDir = outputDir;
+        this.downloadRequestIdResolver = new DownloadRequestIdResolver();
     }
 
     public UpdateResult update(CatalogType catalogType) {
@@ -39,6 +43,7 @@ public final class RegistryUpdateService {
 
         CatalogInfo remoteCatalog = apiClient.getCatalog(catalogType);
         String remoteIdXml = remoteCatalog.requireIdXml();
+        String downloadRequestId = downloadRequestIdResolver.resolve(catalogType, remoteCatalog);
 
         RegistryState currentState = stateStore.load(catalogType);
 
@@ -61,17 +66,22 @@ public final class RegistryUpdateService {
             Masking.id(remoteIdXml)
         );
 
-        Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, remoteIdXml);
+        Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, downloadRequestId);
+        String sha256 = Sha256.ofFile(savedFile);
 
         RegistryState newState = new RegistryState(
             remoteIdXml,
             remoteCatalog.effectiveDate(),
             savedFile.toAbsolutePath().toString(),
-            LocalDateTime.now().toString()
+            LocalDateTime.now().toString(),
+            sha256
         );
 
         stateStore.save(catalogType, newState);
 
+        log.info("Registry file checksum calculated. catalog={}, sha256={}",
+                catalogType.getCode(),
+                sha256);
         log.info("Registry update completed. catalog={}, file={}",
                 catalogType.getCode(),
                 savedFile.toAbsolutePath()
@@ -83,7 +93,7 @@ public final class RegistryUpdateService {
     private Path downloadAndMoveAtomically(
             CatalogType catalogType,
             CatalogInfo catalogInfo,
-            String remoteIdXml
+            String downloadRequestId
     ) {
         try {
             Path catalogDir = outputDir.resolve(catalogType.getCode());
@@ -94,7 +104,7 @@ public final class RegistryUpdateService {
 
             Files.deleteIfExists(tempFile);
 
-            DownloadedFile downloadedFile = apiClient.downloadFile(catalogType, remoteIdXml, tempFile);
+            DownloadedFile downloadedFile = apiClient.downloadFile(catalogType, downloadRequestId, tempFile);
 
             Files.move(
                     downloadedFile.getPath(),

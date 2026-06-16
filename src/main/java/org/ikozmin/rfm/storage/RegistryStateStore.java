@@ -35,7 +35,8 @@ public final class RegistryStateStore {
                     idXml,
                     properties.getProperty(prefix + "date"),
                     properties.getProperty(prefix + "file"),
-                    properties.getProperty(prefix + "downloadedAt")
+                    properties.getProperty(prefix + "downloadedAt"),
+                    properties.getProperty(prefix + "sha256")
             );
 
             log.info("Local state loaded. catalog={}, idXml={}, file={}",
@@ -60,6 +61,7 @@ public final class RegistryStateStore {
             properties.setProperty(prefix + "date", nullToEmpty(state.getDate()));
             properties.setProperty(prefix + "file", nullToEmpty(state.getFile()));
             properties.setProperty(prefix + "downloadedAt", nullToEmpty(state.getDownloadedAt()));
+            properties.setProperty(prefix + "sha256", nullToEmpty(state.getSha256()));
 
             Path tempPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
 

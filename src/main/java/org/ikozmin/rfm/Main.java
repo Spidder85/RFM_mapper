@@ -18,6 +18,8 @@ import org.ikozmin.rfm.service.RegistryUpdateService;
 import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.ikozmin.rfm.model.Contour;
+import org.ikozmin.rfm.client.RetryPolicy;
+import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,9 +30,11 @@ public final class Main {
         try {
             new Main().run(args);
         } catch (Exception e) {
-            log.error("Application failed: {}", e.getMessage(), e);
+            ExitCode exitCode = ExitCode.from(e);
+
+            log.error("Application failed. exitCode={}, error={}", exitCode, e.getMessage(), e);
             System.err.println("Application failed: " + e.getMessage());
-            System.exit(1);
+            System.exit(exitCode.code());
         }
     }
 
@@ -78,10 +82,12 @@ public final class Main {
             new RfmEndpoints(contour)
         );
 
-        apiClient.authenticate(
+        RetryPolicy retryPolicy = new RetryPolicy(3, Duration.ofSeconds(2));
+
+        retryPolicy.executeVoid("authenticate", () -> apiClient.authenticate(
             configLoader.userName(config),
             configLoader.password(config)
-        );
+        ));
 
         RegistryUpdateService updateService = new RegistryUpdateService(
             apiClient,
@@ -89,7 +95,10 @@ public final class Main {
             outputDir
         );
 
-        UpdateResult result = updateService.update(catalogType);
+        UpdateResult result = retryPolicy.execute(
+                "registry-update-" + catalogType.getCode(),
+                () -> updateService.update(catalogType)
+        );
 
         if (result.isDownloaded()) {
             log.info("Update result: downloaded. idXml={}, file={}", result.getIdXml(), result.getFile());

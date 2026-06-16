@@ -66,4 +66,16 @@ public final class CatalogInfo {
 
         return idXml;
     }
+
+    public void setIdXml(String idXml) {
+        this.idXml = idXml;
+    }
+
+    public void setIdDbf(String idDbf) {
+        this.idDbf = idDbf;
+    }
+
+    public void setIdDoc(String idDoc) {
+        this.idDoc = idDoc;
+    }
 }

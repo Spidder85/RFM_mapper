@@ -24,7 +24,7 @@ import org.ikozmin.rfm.model.DownloadedFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-public final class RfmApiClient {
+public final class RfmApiClient implements RfmClient {
     private static final Logger log = LoggerFactory.getLogger(RfmApiClient.class);
 
     private final ObjectMapper objectMapper;
@@ -42,6 +42,7 @@ public final class RfmApiClient {
         this.responseValidator = new ResponseValidator();
     }
 
+    @Override
     public void authenticate(String userName, String password) {
         String url = endpoints.authenticateUrl();
 
@@ -92,6 +93,7 @@ public final class RfmApiClient {
         }
     }
 
+    @Override
     public CatalogInfo getCatalog(CatalogType catalogType) {
         requireAuthenticated();
 
@@ -132,6 +134,7 @@ public final class RfmApiClient {
         }
     }
 
+    @Override
     public DownloadedFile downloadFile(CatalogType catalogType, String idXml, Path tempFile) {
         requireAuthenticated();
 
