@@ -26,6 +26,7 @@ public final class RegistryUpdateService {
     private final Path outputDir;
 
     private final DownloadRequestIdResolver downloadRequestIdResolver;
+    private final RegistryFileValidator registryFileValidator;
 
     public RegistryUpdateService(
         RfmClient apiClient,
@@ -36,6 +37,7 @@ public final class RegistryUpdateService {
         this.stateStore = stateStore;
         this.outputDir = outputDir;
         this.downloadRequestIdResolver = new DownloadRequestIdResolver();
+        this.registryFileValidator = new RegistryFileValidator();
     }
 
     public UpdateResult update(CatalogType catalogType) {
@@ -67,6 +69,7 @@ public final class RegistryUpdateService {
         );
 
         Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, downloadRequestId);
+        registryFileValidator.validate(catalogType, savedFile);
         String sha256 = Sha256.ofFile(savedFile);
 
         RegistryState newState = new RegistryState(

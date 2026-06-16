@@ -11,6 +11,9 @@ import org.ikozmin.rfm.model.AuthResponse;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.rfm.audit.AuditEnvelope;
+import org.ikozmin.rfm.audit.AuditWriter;
+import java.time.LocalDateTime;
 
 import java.io.IOException;
 import java.net.URI;
@@ -34,12 +37,14 @@ public final class RfmApiClient implements RfmClient {
     private String accessToken;
 
     private final ResponseValidator responseValidator;
+    private final AuditWriter auditWriter;
 
-    public RfmApiClient(HttpClient httpClient, RfmEndpoints endpoints) {
+    public RfmApiClient(HttpClient httpClient, RfmEndpoints endpoints, AuditWriter auditWriter) {
         this.objectMapper = new ObjectMapper();
         this.httpClient = httpClient;
         this.endpoints = endpoints;
         this.responseValidator = new ResponseValidator();
+        this.auditWriter = auditWriter;
     }
 
     @Override
@@ -116,6 +121,16 @@ public final class RfmApiClient implements RfmClient {
 
             requireSuccess(response.statusCode(), response.body(), url);
 
+            writeAudit(
+                    auditCatalogResponseFileName(catalogType),
+                    "POST",
+                    url,
+                    "",
+                    response.statusCode(),
+                    response.body(),
+                    "Catalog response"
+            );
+
             CatalogInfo catalogInfo = objectMapper.readValue(response.body(), CatalogInfo.class);
             String idXml = catalogInfo.requireIdXml();
 
@@ -150,6 +165,16 @@ public final class RfmApiClient implements RfmClient {
             Files.createDirectories(tempFile.toAbsolutePath().getParent());
 
             String form = "id=" + URLEncoder.encode(idXml, StandardCharsets.UTF_8);
+
+            writeAudit(
+                    auditFileRequestFileName(catalogType),
+                    "POST",
+                    url,
+                    form,
+                    null,
+                    null,
+                    "File request. Binary response body is not saved"
+            );
 
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
                     .timeout(java.time.Duration.ofMinutes(5))
@@ -215,5 +240,52 @@ public final class RfmApiClient implements RfmClient {
 
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private void writeAudit(
+            String fileName,
+            String method,
+            String url,
+            String requestBody,
+            Integer responseStatus,
+            String responseBody,
+            String note
+    ){
+        if (auditWriter == null) {
+            return;
+        }
+
+        auditWriter.write(
+                fileName,
+                new AuditEnvelope(
+                        LocalDateTime.now(),
+                        method,
+                        url,
+                        requestBody,
+                        responseStatus,
+                        responseBody,
+                        note
+                )
+        );
+    }
+
+    private String auditCatalogResponseFileName(CatalogType catalogType) {
+        return switch (catalogType) {
+            case TE2, TE21 -> "1_RespTE.json";
+            case MVK -> "3_RespMVK.json";
+            case UN -> "6_RespUN.json";
+            case UN_RUS -> "7_RespUN_RUS.json";
+            default -> catalogType.getCode() + "_catalog_response.json";
+        };
+    }
+
+    private String auditFileRequestFileName(CatalogType catalogType) {
+        return switch (catalogType) {
+            case TE2, TE21 -> "2_ReqTE.json";
+            case MVK -> "4_ReqMVK.json";
+            case UN -> "8_ReqUN.json";
+            case UN_RUS -> "9_ReqUN_RUS.json";
+            default -> catalogType.getCode() + "_file_request.json";
+        };
     }
 }

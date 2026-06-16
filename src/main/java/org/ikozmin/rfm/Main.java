@@ -19,6 +19,7 @@ import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.ikozmin.rfm.model.Contour;
 import org.ikozmin.rfm.client.RetryPolicy;
+import org.ikozmin.rfm.audit.AuditWriter;
 import java.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,9 +78,12 @@ public final class Main {
         HttpClient httpClient = new RfmHttpClientFactory()
             .create(certificate, config.getCertificate());
 
+        AuditWriter auditWriter = new AuditWriter(outputDir.resolve("audit"));
+
         RfmApiClient apiClient = new RfmApiClient(
-            httpClient,
-            new RfmEndpoints(contour)
+                httpClient,
+                new RfmEndpoints(contour),
+                auditWriter
         );
 
         RetryPolicy retryPolicy = new RetryPolicy(3, Duration.ofSeconds(2));
