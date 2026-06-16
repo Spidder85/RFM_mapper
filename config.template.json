@@ -1,10 +1,10 @@
 {
-    // "Credentials": {
-    //     "UserName": "[введите имя пользователя]",
-    //     "Password": "[введите пароль]"
-    // },
-    // "Certificate": {
-    // "SerialNumber": "[введите серийный номер сертификата]",
+//  "Credentials": {
+//    "UserName": "YOUR_RFM_USERNAME",
+//    "Password": "YOUR_RFM_PASSWORD"
+//  },
+//  "Certificate": {
+//    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
   "Credentials": {
     "UserName": "1660055801165501001",
     "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
@@ -43,6 +43,6 @@
     "LogFileName": "rfm_client.log",
     "LogLevel": "INFO"
   },
-  "DefaultCatalog": "te2",
+  "DefaultCatalog": "te21",
   "UseTestContour": false
 }
