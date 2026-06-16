@@ -50,53 +50,9 @@ public final class CryptoProProviderRegistrar {
             }
         }
 
-        // ========== НОВЫЙ БЛОК: РУЧНАЯ РЕГИСТРАЦИЯ JTLS ==========
-        try {
-            if (Security.getProvider("JTLS") == null) {
-                Class<?> jtlsClass = Class.forName("ru.CryptoPro.ssl.Provider");
-                Provider jtlsProvider = (Provider) jtlsClass.getDeclaredConstructor().newInstance();
-                Security.addProvider(jtlsProvider);
-                log.info("CryptoPro provider registered manually. name=JTLS, class=ru.CryptoPro.ssl.Provider");
-                loaded.add("JTLS");
-            }
-        } catch (Exception e) {
-            log.warn("Failed to register JTLS provider manually: {}", e.getMessage());
-        }
-        // ==========================================================
-
         if (loaded.isEmpty()) {
             throw new RfmCertificateException("No CryptoPro providers were registered. Failed classes: " + failed);
         }
-
-        // Добавляем поддержку алгоритма ГОСТ 2012 для JCSP
-        try {
-            Provider jcspProvider = Security.getProvider("JCSP");
-            if (jcspProvider != null) {
-                // Пробуем добавить все возможные варианты алгоритма
-                String[] algorithms = {
-                    "GOST3411-2012withGOST3410-2012-256",
-                    "GOST3411withGOST3410EL",
-                    "GOST3411withGOST3410",
-                    "GOST3411-2012withGOST3410-2012"
-                };
-                
-                for (String alg : algorithms) {
-                    try {
-                        jcspProvider.put("Signature." + alg, "ru.CryptoPro.JCP.Sign.cl_0");
-                        log.info("Added signature algorithm to JCSP: {}", alg);
-                    } catch (Exception e) {
-                        log.debug("Could not add algorithm {}: {}", alg, e.getMessage());
-                    }
-                }
-                
-                log.info("JCSP signature algorithms configured");
-            } else {
-                log.warn("JCSP provider not found, cannot add signature algorithms");
-            }
-        } catch (Exception e) {
-            log.warn("Failed to configure JCSP signature algorithms: {}", e.getMessage());
-        }
-        // =======================================================
 
         log.info("CryptoPro providers ready: {}", loaded);
     }

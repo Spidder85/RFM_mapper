@@ -6,10 +6,10 @@
     // "Certificate": {
     // "SerialNumber": "[введите серийный номер сертификата]",
   "Credentials": {
-      "UserName": "1660055801165501001",
-      "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
+    "UserName": "1660055801165501001",
+    "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
   },
-    "Certificate": {
+  "Certificate": {
     "SerialNumber": "40601D0005296A417B49C00C680A0452",
     "StoreLocation": "CurrentUser",
     "StoreName": "My",
@@ -19,17 +19,24 @@
     "UseCryptoPro": true,
     "CryptoPro": {
         "ProviderClasses": [
-            "ru.CryptoPro.JCP.JCP",
-            "ru.CryptoPro.JCSP.JCSP",
-            "ru.CryptoPro.Crypto.CryptoProvider",
-            "ru.CryptoPro.ssl.Provider"
+          "ru.CryptoPro.JCP.JCP",
+          "ru.CryptoPro.JCSP.JCSP",
+          "ru.CryptoPro.Crypto.CryptoProvider",
+          "ru.CryptoPro.ssl.Provider"
         ],
-        "KeyStoreType": "REGISTRY",
-        "KeyStoreProvider": "JCSP",
-        "TrustStoreType": "WINDOWS-ROOT",
-        "TrustStoreProvider": "SunMSCAPI",
-        "SslProtocol": "GostTLSv1.2",
-        "SslProvider": "JTLS"
+      "KeyStoreType": "REGISTRY",
+      "KeyStoreProvider": "JCSP",
+
+      "KeyManagerAlgorithm": "GostX509",
+      "KeyManagerProvider": "JTLS",
+
+      "TrustStoreType": "Windows-ROOT",
+      "TrustStoreProvider": "SunMSCAPI",
+      "TrustManagerAlgorithm": "PKIX",
+      "TrustManagerProvider": "",
+
+      "SslProtocol": "GostTLSv1.2",
+      "SslProvider": "JTLS"
     }
   },
   "Logging": {

@@ -20,6 +20,10 @@ import org.ikozmin.rfm.exception.RfmCertificateException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.TrustManager;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+
 public final class RfmHttpClientFactory {
     private static final Logger log = LoggerFactory.getLogger(RfmHttpClientFactory.class);
 
@@ -37,7 +41,9 @@ public final class RfmHttpClientFactory {
             SSLContext sslContext = createSslContext(
                 certificate,
                 "TLS",
+                null,
                 null
+
             );
 
             return buildHttpClient(sslContext);
@@ -64,7 +70,8 @@ public final class RfmHttpClientFactory {
             SSLContext sslContext = createSslContext(
                 certificate,
                 sslProtocol,
-                sslProvider
+                sslProvider,
+                cryptoPro
             );
 
             return buildHttpClient(sslContext);
@@ -76,11 +83,10 @@ public final class RfmHttpClientFactory {
     private SSLContext createSslContext(
             ClientCertificate certificate,
             String sslProtocol,
-            String sslProvider
+            String sslProvider,
+            AppConfig.CryptoPro cryptoPro
     ) throws Exception {
-        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
-                KeyManagerFactory.getDefaultAlgorithm()
-        );
+        KeyManagerFactory keyManagerFactory = createKeyManagerFactory(cryptoPro);
 
         keyManagerFactory.init(certificate.getKeyStore(), new char[0]);
 
@@ -90,11 +96,8 @@ public final class RfmHttpClientFactory {
                 certificate.getAlias()
         );
 
-        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
-                TrustManagerFactory.getDefaultAlgorithm()
-        );
-
-        trustManagerFactory.init((KeyStore) null);
+        TrustManagerFactory trustManagerFactory = createTrustManagerFactory(cryptoPro);
+        trustManagerFactory.init(createTrustStore(cryptoPro));
 
         SSLContext sslContext = sslProvider == null
                 ? SSLContext.getInstance(sslProtocol)
@@ -149,5 +152,51 @@ public final class RfmHttpClientFactory {
 
     private static String trimToNull(String value) {
         return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    private KeyManagerFactory createKeyManagerFactory(AppConfig.CryptoPro cryptoPro) throws Exception {
+        String algorithm = valueOrDefault(
+                cryptoPro == null ? null : cryptoPro.getKeyManagerAlgorithm(),
+                KeyManagerFactory.getDefaultAlgorithm()
+        );
+
+        String provider = trimToNull(
+                cryptoPro == null ? null : cryptoPro.getKeyManagerProvider()
+        );
+
+        return provider == null
+                ? KeyManagerFactory.getInstance(algorithm)
+                : KeyManagerFactory.getInstance(algorithm, provider);
+    }
+
+    private TrustManagerFactory createTrustManagerFactory(AppConfig.CryptoPro cryptoPro) throws Exception {
+        String algorithm = valueOrDefault(
+                cryptoPro == null ? null : cryptoPro.getTrustManagerAlgorithm(),
+                TrustManagerFactory.getDefaultAlgorithm()
+        );
+
+        String provider = trimToNull(
+                cryptoPro == null ? null : cryptoPro.getTrustManagerProvider()
+        );
+
+        return provider == null
+                ? TrustManagerFactory.getInstance(algorithm)
+                : TrustManagerFactory.getInstance(algorithm, provider);
+    }
+
+    private KeyStore createTrustStore(AppConfig.CryptoPro cryptoPro) throws Exception {
+        String trustStoreType = trimToNull(cryptoPro == null ? null : cryptoPro.getTrustStoreType());
+        if (trustStoreType == null) {
+            return null;
+        }
+
+        String trustStoreProvider = trimToNull(cryptoPro.getTrustStoreProvider());
+
+        KeyStore trustStore = trustStoreProvider == null
+                ? KeyStore.getInstance(trustStoreType)
+                : KeyStore.getInstance(trustStoreType, trustStoreProvider);
+
+        trustStore.load(null, null);
+        return trustStore;
     }
 }

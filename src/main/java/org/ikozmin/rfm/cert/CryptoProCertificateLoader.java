@@ -44,33 +44,9 @@ public final class CryptoProCertificateLoader {
 
             keyStore.load(null, null);
 
-            // ========== ОТЛАДКА: вывод всех сертификатов ==========
-            log.info("=== All certificates in JCP HDImageStore ===");
-            Enumeration<String> allAliases = keyStore.aliases();
-            int count = 0;
-            while (allAliases.hasMoreElements()) {
-                count++;
-                String alias = allAliases.nextElement();
-                Certificate cert = keyStore.getCertificate(alias);
-                if (cert instanceof X509Certificate) {
-                    X509Certificate x509 = (X509Certificate) cert;
-                    // Серийный номер в разных форматах
-                    String serialHex = x509.getSerialNumber().toString(16);
-                    byte[] bytes = x509.getSerialNumber().toByteArray();
-                    StringBuilder hexBytes = new StringBuilder();
-                    for (byte b : bytes) {
-                        hexBytes.append(String.format("%02x", b & 0xFF));
-                    }
-                    log.info("  [{}] Alias: {}", count, alias);
-                    log.info("      Serial (toString16): {}", serialHex);
-                    log.info("      Serial (bytes): {}", hexBytes.toString());
-                    log.info("      Subject: {}", x509.getSubjectDN());
-                    log.info("      Has private key: {}", keyStore.isKeyEntry(alias));
-                }
-            }
-            log.info("Total certificates in JCP store: {}", count);
-            // =====================================================
-
+            log.info("CryptoPro key store opened. type={}, provider={}",
+                    keyStoreType,
+                    keyStoreProvider == null ? "<default>" : keyStoreProvider);
 
             String alias = findAliasBySerial(keyStore, serialNumber);
 
