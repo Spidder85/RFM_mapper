@@ -19,6 +19,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 
+import org.ikozmin.rfm.model.DownloadedFile;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
 public final class RfmApiClient {
     private static final Logger log = LoggerFactory.getLogger(RfmApiClient.class);
 
@@ -28,10 +32,13 @@ public final class RfmApiClient {
 
     private String accessToken;
 
+    private final ResponseValidator responseValidator;
+
     public RfmApiClient(HttpClient httpClient, RfmEndpoints endpoints) {
         this.objectMapper = new ObjectMapper();
         this.httpClient = httpClient;
         this.endpoints = endpoints;
+        this.responseValidator = new ResponseValidator();
     }
 
     public void authenticate(String userName, String password) {
@@ -44,6 +51,7 @@ public final class RfmApiClient {
             String requestBody = objectMapper.writeValueAsString(authRequest);
 
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(java.time.Duration.ofMinutes(2))
                     .header("Accept", "application/json")
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(requestBody, StandardCharsets.UTF_8))
@@ -92,6 +100,7 @@ public final class RfmApiClient {
             log.info("Requesting catalog. type={}, url={}", catalogType.getCode(), url);
 
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(java.time.Duration.ofMinutes(2))
                     .header("Accept", "application/json")
                     .header("Authorization", "Bearer " + accessToken)
                     .POST(HttpRequest.BodyPublishers.noBody())
@@ -122,7 +131,7 @@ public final class RfmApiClient {
         }
     }
 
-    public byte[] downloadFile(CatalogType catalogType, String idXml) {
+    public DownloadedFile downloadFile(CatalogType catalogType, String idXml, Path tempFile) {
         requireAuthenticated();
 
         String url = endpoints.fileUrl(catalogType);
@@ -130,37 +139,58 @@ public final class RfmApiClient {
         try {
             log.info("Downloading catalog file. type={}, idXml={}, url={}", catalogType.getCode(), idXml, url);
 
+            Files.createDirectories(tempFile.toAbsolutePath().getParent());
+
             String form = "id=" + URLEncoder.encode(idXml, StandardCharsets.UTF_8);
 
             HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .header("Accept", "application/octet-stream")
+                    .timeout(java.time.Duration.ofMinutes(5))
+                    .header("Accept", expectedAcceptHeader(catalogType))
                     .header("Authorization", "Bearer " + accessToken)
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString(form, StandardCharsets.UTF_8))
                     .build();
 
-            HttpResponse<byte[]> response = httpClient.send(
+            HttpResponse<Path> response = httpClient.send(
                     request,
-                    HttpResponse.BodyHandlers.ofByteArray()
+                    HttpResponse.BodyHandlers.ofFile(tempFile)
             );
 
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                String body = new String(response.body(), StandardCharsets.UTF_8);
-                throw new RfmApiException("File download failed. URL: " + url, response.statusCode(), body);
-            }
+            String contentType = response.headers()
+                    .firstValue("Content-Type")
+                    .orElse("");
 
-            log.info("Catalog file downloaded. type={}, idXml={}, bytes={}",
+            long size = Files.exists(response.body()) ? Files.size(response.body()) : 0L;
+
+            responseValidator.validateFileResponse(
+                    catalogType,
+                    response.statusCode(),
+                    contentType,
+                    size
+            );
+
+            log.info("Catalog file downloaded. type={}, idXml={}, path={}, bytes={}, contentType={}",
                     catalogType.getCode(),
                     idXml,
-                    response.body().length);
+                    response.body().toAbsolutePath(),
+                    size,
+                    contentType);
 
-            return response.body();
+            return new DownloadedFile(response.body(), contentType, size);
         } catch (IOException e) {
             throw new RfmApiException("File download I/O error. URL: " + url, -1, e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new RfmApiException("File download interrupted. URL: " + url, -1, e.getMessage());
         }
+    }
+
+    private String expectedAcceptHeader(CatalogType catalogType) {
+        if (catalogType == CatalogType.UN || catalogType == CatalogType.UN_RUS) {
+            return "application/xml, application/octet-stream, */*";
+        }
+
+        return "application/zip, application/octet-stream, */*";
     }
 
     private void requireAuthenticated() {

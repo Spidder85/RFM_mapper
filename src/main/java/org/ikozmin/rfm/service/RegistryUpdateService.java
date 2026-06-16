@@ -1,6 +1,7 @@
 package org.ikozmin.rfm.service;
 
-// Бизнес-логика проверки обновления и скачивания. API-клиент не знает про state и файлы, storage не знает про HTTP.
+import org.ikozmin.rfm.model.DownloadedFile;
+import java.nio.file.StandardCopyOption;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,8 +57,7 @@ public final class RegistryUpdateService {
             remoteIdXml
         );
 
-        byte[] fileBytes = apiClient.downloadFile(catalogType, remoteIdXml);
-        Path savedFile = saveFile(catalogType, remoteCatalog, fileBytes);
+        Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, remoteIdXml);
 
         RegistryState newState = new RegistryState(
             remoteIdXml,
@@ -73,19 +73,37 @@ public final class RegistryUpdateService {
         return new UpdateResult(true, remoteIdXml, savedFile);
     }
 
-    private Path saveFile(CatalogType catalogType, CatalogInfo catalogInfo, byte[] fileBytes) {
+    private Path downloadAndMoveAtomically(
+            CatalogType catalogType,
+            CatalogInfo catalogInfo,
+            String remoteIdXml
+    ) {
         try {
             Path catalogDir = outputDir.resolve(catalogType.getCode());
             Files.createDirectories(catalogDir);
 
-            Path target = catalogDir.resolve(buildFileName(catalogType, catalogInfo));
-            Files.write(target, fileBytes);
+            Path finalFile = catalogDir.resolve(buildFileName(catalogType, catalogInfo));
+            Path tempFile = catalogDir.resolve(finalFile.getFileName().toString() + ".part");
 
-            log.info("Файл реестра сохранен. path={}, bytes={}", target.toAbsolutePath(), fileBytes.length);
+            Files.deleteIfExists(tempFile);
 
-            return target;
+            DownloadedFile downloadedFile = apiClient.downloadFile(catalogType, remoteIdXml, tempFile);
+
+            Files.move(
+                    downloadedFile.getPath(),
+                    finalFile,
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+            );
+
+            log.info("Registry file saved atomically. path={}, bytes={}, contentType={}",
+                    finalFile.toAbsolutePath(),
+                    downloadedFile.getSize(),
+                    downloadedFile.getContentType());
+
+            return finalFile;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to save registry file", e);
+            throw new IllegalStateException("Failed to download and save registry file", e);
         }
     }
 
