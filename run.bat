@@ -3,7 +3,7 @@ setlocal
 
 set JAVA_HOME=C:\tmp\jdk-21.0.10
 set PATH=C:\Program Files\Crypto Pro\CSP;%JAVA_HOME%\bin;%PATH%
-set JAR_FILE=rfm-client-1.0.0.jar
+set JAR_FILE=rfm-client.jar
 
 if not exist "%JAR_FILE%" (
     echo ERROR: JAR file not found: %JAR_FILE%
@@ -26,7 +26,7 @@ echo.
     -Djavax.net.ssl.trustStore=NONE ^
     -Djavax.net.ssl.trustStoreType=Windows-ROOT ^
     -Dcom.sun.net.ssl.checkRevocation=false ^
-    -cp "rfm-client-1.0.0.jar;libs\*" ^
+    -cp "rfm-client.jar;libs\*" ^
     org.ikozmin.rfm.Main ^
     --config config.json ^
     --prod ^

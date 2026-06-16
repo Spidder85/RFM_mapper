@@ -39,7 +39,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-jscp</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/JCSP.jar</systemPath>
         </dependency>
@@ -48,7 +48,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-jcp</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/JCP.jar</systemPath>
         </dependency>
@@ -57,7 +57,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-asn1p</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/ASN1P.jar</systemPath>
         </dependency>
@@ -66,7 +66,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-asn1rt</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/asn1rt.jar</systemPath>
         </dependency>
@@ -75,7 +75,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-jcpRevCheck</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/JCPRevCheck.jar</systemPath>
         </dependency>
@@ -84,7 +84,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-cpssl</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/cpSSL.jar</systemPath>
         </dependency>
@@ -93,7 +93,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-jcrypto</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/JCryptoP.jar</systemPath>
         </dependency>
@@ -102,7 +102,7 @@
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>
             <artifactId>jcp-xml</artifactId>
-            <version>5.0.40363-A</version>
+            <version>5.0.49800-A</version>
             <scope>system</scope>
             <systemPath>${project.basedir}/libs/JCPxml.jar</systemPath>
         </dependency>

@@ -1,10 +1,16 @@
 {
-    "Credentials": {
-        "UserName": "[введите имя пользователя]",
-        "Password": "[введите пароль]"
-    },
+    // "Credentials": {
+    //     "UserName": "[введите имя пользователя]",
+    //     "Password": "[введите пароль]"
+    // },
+    // "Certificate": {
+    // "SerialNumber": "[введите серийный номер сертификата]",
+  "Credentials": {
+      "UserName": "1660055801165501001",
+      "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
+  },
     "Certificate": {
-    "SerialNumber": "[введите серийный номер сертификата]",
+    "SerialNumber": "40601D0005296A417B49C00C680A0452",
     "StoreLocation": "CurrentUser",
     "StoreName": "My",
     "CertFilePath": null,
@@ -19,12 +25,11 @@
             "ru.CryptoPro.ssl.Provider"
         ],
         "KeyStoreType": "REGISTRY",
-            "KeyStoreProvider": "JCSP",
-            "TrustStoreType": "WINDOWS-ROOT",
-            "TrustStoreProvider": "SunMSCAPI",
-            "SslProtocol": "GostTLS",
-            "SslProvider": "JTLS",
-            "SignatureAlgorithm": "GOST3411-2012withGOST3410-2012-256"
+        "KeyStoreProvider": "JCSP",
+        "TrustStoreType": "WINDOWS-ROOT",
+        "TrustStoreProvider": "SunMSCAPI",
+        "SslProtocol": "GostTLSv1.2",
+        "SslProvider": "JTLS"
     }
   },
   "Logging": {
