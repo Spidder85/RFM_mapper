@@ -1,15 +1,15 @@
 package org.ikozmin.rfm.cert;
 
-import org.ikozmin.rfm.logging.Masking;
-import org.ikozmin.rfm.exception.RfmCertificateException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Enumeration;
 import java.util.Locale;
+
+import org.ikozmin.rfm.exception.RfmCertificateException;
+import org.ikozmin.rfm.logging.Masking;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 
 public final class CertificateLoader {
@@ -19,9 +19,18 @@ public final class CertificateLoader {
         try {
             log.info("Loading client certificate from Windows-MY by serial {}", Masking.serial(serialNumber));
 
-            KeyStore keyStore = KeyStore.getInstance("Windows-MY");
+            KeyStore keyStore = KeyStore.getInstance("Windows-MY-CURRENTUSER");
             keyStore.load(null, null);
 
+            // Подсчёт всех сертификатов в хранилище
+            Enumeration<String> allAliases = keyStore.aliases();
+            int totalCount = 0;
+            while (allAliases.hasMoreElements()) {
+                allAliases.nextElement();
+                totalCount++;
+            }
+            log.info("Total certificates in Windows-MY-CURRENTUSER store: {}", totalCount);
+            // ========================================
             String alias = findAliasBySerial(keyStore, serialNumber);
 
             log.info("Client certificate selected. alias={}", alias);

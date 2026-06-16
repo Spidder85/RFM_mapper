@@ -6,6 +6,7 @@ import java.nio.file.Path;
 
 import org.ikozmin.rfm.cert.CertificateLoader;
 import org.ikozmin.rfm.cert.ClientCertificate;
+import org.ikozmin.rfm.cert.CryptoProCertificateLoader;
 import org.ikozmin.rfm.client.RfmApiClient;
 import org.ikozmin.rfm.client.RfmEndpoints;
 import org.ikozmin.rfm.client.RfmHttpClientFactory;
@@ -56,10 +57,18 @@ public final class Main {
         log.info("Каталог: {}", catalogType.getCode());
         log.info("Серийный номер сертификата: {}", Masking.serial(configLoader.certificateSerial(config)));
 
-        ClientCertificate certificate = new CertificateLoader()
-            .loadFromWindowsMy(configLoader.certificateSerial(config));
-
-        HttpClient httpClient = new RfmHttpClientFactory().create(certificate);
+        ClientCertificate certificate;
+        
+        if (config.getCertificate().isUseCryptoPro()) {
+            certificate = new CryptoProCertificateLoader()
+                .load(config.getCertificate(), configLoader.certificateSerial(config));
+        } else {
+            certificate = new CertificateLoader()
+                .loadFromWindowsMy(configLoader.certificateSerial(config));
+        }
+        
+        HttpClient httpClient = new RfmHttpClientFactory()
+            .create(certificate, config.getCertificate());
 
         RfmApiClient apiClient = new RfmApiClient(
             httpClient,

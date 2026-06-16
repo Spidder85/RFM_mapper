@@ -74,6 +74,12 @@ public final class AppConfig {
         @JsonProperty("CertPfxPassword")
         private String certPfxPassword;
 
+        @JsonProperty("UseCryptoPro")
+        private boolean useCryptoPro;
+
+        @JsonProperty("CryptoPro")
+        private CryptoPro cryptoPro;
+
         public String getSerialNumber() {
             return serialNumber;
         }
@@ -92,6 +98,52 @@ public final class AppConfig {
 
         public String getCertPfxPassword() {
             return certPfxPassword;
+        }
+
+        public boolean isUseCryptoPro() {
+            return useCryptoPro;
+        }
+
+        public CryptoPro getCryptoPro() {
+            return cryptoPro;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static final class CryptoPro {
+        @JsonProperty("ProviderClasses")
+        private String[] providerClasses;
+
+        @JsonProperty("KeyStoreType")
+        private String keyStoreType;
+
+        @JsonProperty("KeyStoreProvider")
+        private String keyStoreProvider;
+
+        @JsonProperty("SslProtocol")
+        private String sslProtocol;
+
+        @JsonProperty("SslProvider")
+        private String sslProvider;
+
+        public String[] getProviderClasses() {
+            return providerClasses;
+        }
+
+        public String getKeyStoreType() {
+            return keyStoreType;
+        }
+
+        public String getKeyStoreProvider() {
+            return keyStoreProvider;
+        }
+
+        public String getSslProtocol() {
+            return sslProtocol;
+        }
+
+        public String getSslProvider() {
+            return sslProvider;
         }
     }
 

@@ -9,7 +9,18 @@
     "StoreName": "My",
     "CertFilePath": null,
     "CertPfxPath": null,
-    "CertPfxPassword": ""
+    "CertPfxPassword": "",
+    "UseCryptoPro": true,
+    "CryptoPro": {
+        "ProviderClasses": [
+            "ru.CryptoPro.JCP.JCP",
+            "ru.CryptoPro.Crypto.CryptoProvider",
+            "ru.CryptoPro.ssl.Provider"
+        ],
+        "KeyStoreType": "Windows-MY",
+        "SslProtocol": "GostTLS",
+        "SslProvider": "JTLS"
+    }
   },
   "Logging": {
     "LogFileName": "rfm_client.log",

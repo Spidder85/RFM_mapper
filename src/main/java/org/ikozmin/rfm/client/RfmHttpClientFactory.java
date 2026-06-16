@@ -1,55 +1,122 @@
 package org.ikozmin.rfm.client;
 
-import org.ikozmin.rfm.cert.CertificateKeyManager;
-import org.ikozmin.rfm.cert.ClientCertificate;
-import org.ikozmin.rfm.exception.RfmCertificateException;
+import java.net.http.HttpClient;
+import java.security.KeyStore;
+import java.security.Provider;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.time.Duration;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedKeyManager;
-import java.net.http.HttpClient;
-import java.security.KeyStore;
-import java.security.SecureRandom;
-import java.time.Duration;
+
+import org.ikozmin.rfm.cert.CertificateKeyManager;
+import org.ikozmin.rfm.cert.ClientCertificate;
+import org.ikozmin.rfm.config.AppConfig;
+import org.ikozmin.rfm.exception.RfmCertificateException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class RfmHttpClientFactory {
-    public HttpClient create(ClientCertificate certificate) {
-        try {
-            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
-                    KeyManagerFactory.getDefaultAlgorithm()
-            );
+    private static final Logger log = LoggerFactory.getLogger(RfmHttpClientFactory.class);
 
-            keyManagerFactory.init(certificate.getKeyStore(), new char[0]);
-
-            X509ExtendedKeyManager originalKeyManager = extractX509KeyManager(keyManagerFactory);
-            CertificateKeyManager fixedAliasKeyManager = new CertificateKeyManager(
-                    originalKeyManager,
-                    certificate.getAlias()
-            );
-
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
-                    TrustManagerFactory.getDefaultAlgorithm()
-            );
-
-            trustManagerFactory.init((KeyStore) null);
-
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(
-                    new KeyManager[]{fixedAliasKeyManager},
-                    trustManagerFactory.getTrustManagers(),
-                    SecureRandom.getInstanceStrong()
-            );
-
-            return HttpClient.newBuilder()
-                    .sslContext(sslContext)
-                    .connectTimeout(Duration.ofSeconds(30))
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .build();
-        } catch (Exception e) {
-            throw new RfmCertificateException("Failed to create mTLS HTTP client", e);
+    public HttpClient create(ClientCertificate certificate, AppConfig.Certificate certificateConfig) {
+        if (certificateConfig.isUseCryptoPro()) {
+            return createCryptoProClient(certificate, certificateConfig.getCryptoPro());
         }
+        return createDefaultClient(certificate);
+    }
+
+    private HttpClient createDefaultClient(ClientCertificate certificate) {
+        try {
+            log.info("Creating default Java TLS HTTP client");
+
+            SSLContext sslContext = createSslContext(
+                certificate,
+                "TLS",
+                null
+            );
+
+            return buildHttpClient(sslContext);
+        } catch (Exception e) {
+            throw new RfmCertificateException("Failed to create default TLS HTTP client", e);
+        }
+    }
+
+    private HttpClient createCryptoProClient(ClientCertificate certificate, AppConfig.CryptoPro cryptoPro) {
+        try {
+            String sslProtocol = valueOrDefault(
+                    cryptoPro == null ? null : cryptoPro.getSslProtocol(),
+                    "GostTLS"
+            );
+
+            String sslProvider = trimToNull(
+                    cryptoPro == null ? null : cryptoPro.getSslProvider()
+            );
+
+            log.info("Creating CryptoPro TLS HTTP client. protocol={}, provider={}",
+                sslProtocol,
+                sslProvider == null ? "<default>" : sslProvider);
+
+            SSLContext sslContext = createSslContext(
+                certificate,
+                sslProtocol,
+                sslProvider
+            );
+
+            return buildHttpClient(sslContext);
+        } catch (Exception e) {
+            throw new RfmCertificateException("Failed to create CryptoPro/JTLS HTTP client", e);
+        }
+    }
+
+    private SSLContext createSslContext(
+            ClientCertificate certificate,
+            String sslProtocol,
+            String sslProvider
+    ) throws Exception {
+        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
+                KeyManagerFactory.getDefaultAlgorithm()
+        );
+
+        keyManagerFactory.init(certificate.getKeyStore(), new char[0]);
+
+        X509ExtendedKeyManager originalKeyManager = extractX509KeyManager(keyManagerFactory);
+        CertificateKeyManager fixedAliasKeyManager = new CertificateKeyManager(
+                originalKeyManager,
+                certificate.getAlias()
+        );
+
+        TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm()
+        );
+
+        trustManagerFactory.init((KeyStore) null);
+
+        SSLContext sslContext = sslProvider == null
+                ? SSLContext.getInstance(sslProtocol)
+                : SSLContext.getInstance(sslProtocol, sslProvider);
+
+        sslContext.init(
+                new KeyManager[]{fixedAliasKeyManager},
+                trustManagerFactory.getTrustManagers(),
+                SecureRandom.getInstanceStrong()
+        );
+
+        logInstalledSecurityProviders();
+
+        return sslContext;
+    }
+
+    private HttpClient buildHttpClient(SSLContext sslContext) {
+        return HttpClient.newBuilder()
+            .sslContext(sslContext)
+            .connectTimeout(Duration.ofSeconds(30))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
     }
 
     private X509ExtendedKeyManager extractX509KeyManager(KeyManagerFactory keyManagerFactory) {
@@ -60,5 +127,27 @@ public final class RfmHttpClientFactory {
         }
 
         throw new RfmCertificateException("X509ExtendedKeyManager not found");
+    }
+
+    private void logInstalledSecurityProviders() {
+        StringBuilder builder = new StringBuilder();
+
+        for (Provider provider : Security.getProviders()) {
+            if (builder.length() > 0) {
+                builder.append(", ");
+            }
+
+            builder.append(provider.getName());
+        }
+
+        log.info("Installed security providers: {}", builder);
+    }
+
+    private static String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.trim().isEmpty() ? defaultValue : value.trim();
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
     }
 }
