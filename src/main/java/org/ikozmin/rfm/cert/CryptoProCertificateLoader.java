@@ -26,7 +26,7 @@ public final class CryptoProCertificateLoader {
 
             String keyStoreType = valueOrDefault(
                 cryptoPro == null ? null : cryptoPro.getKeyStoreType(),
-                "HDImageStore"  // JCP 2.0 использует HDImageStore
+                "Windows-MY"
             );
 
             String keyStoreProvider = trimToNull(
@@ -44,6 +44,34 @@ public final class CryptoProCertificateLoader {
 
             keyStore.load(null, null);
 
+            // ========== ОТЛАДКА: вывод всех сертификатов ==========
+            log.info("=== All certificates in JCP HDImageStore ===");
+            Enumeration<String> allAliases = keyStore.aliases();
+            int count = 0;
+            while (allAliases.hasMoreElements()) {
+                count++;
+                String alias = allAliases.nextElement();
+                Certificate cert = keyStore.getCertificate(alias);
+                if (cert instanceof X509Certificate) {
+                    X509Certificate x509 = (X509Certificate) cert;
+                    // Серийный номер в разных форматах
+                    String serialHex = x509.getSerialNumber().toString(16);
+                    byte[] bytes = x509.getSerialNumber().toByteArray();
+                    StringBuilder hexBytes = new StringBuilder();
+                    for (byte b : bytes) {
+                        hexBytes.append(String.format("%02x", b & 0xFF));
+                    }
+                    log.info("  [{}] Alias: {}", count, alias);
+                    log.info("      Serial (toString16): {}", serialHex);
+                    log.info("      Serial (bytes): {}", hexBytes.toString());
+                    log.info("      Subject: {}", x509.getSubjectDN());
+                    log.info("      Has private key: {}", keyStore.isKeyEntry(alias));
+                }
+            }
+            log.info("Total certificates in JCP store: {}", count);
+            // =====================================================
+
+
             String alias = findAliasBySerial(keyStore, serialNumber);
 
             log.info("CryptoPro client certificate selected. alias={}", alias);
@@ -54,38 +82,73 @@ public final class CryptoProCertificateLoader {
     }
 
     private String findAliasBySerial(KeyStore keyStore, String serialNumber) throws Exception {
-        String expected = normalizeSerial(serialNumber);
+        // String expected = normalizeSerial(serialNumber);
 
+        // Enumeration<String> aliases = keyStore.aliases();
+        // while (aliases.hasMoreElements()) {
+        //     String alias = aliases.nextElement();
+        //     Certificate certificate = keyStore.getCertificate(alias);
+
+        //     if (!(certificate instanceof X509Certificate x509)) {
+        //         continue;
+        //     }
+
+        //     // Правильное получение серийного номера через байты
+        //     byte[] bytes = x509.getSerialNumber().toByteArray();
+        //     StringBuilder hex = new StringBuilder();
+        //     for (byte b : bytes) {
+        //         hex.append(String.format("%02x", b & 0xFF));
+        //     }
+
+        //     String actual = normalizeSerial(x509.getSerialNumber().toString(16));
+
+        //     if (actual.equals(expected)) {
+        //         if (!keyStore.isKeyEntry(alias)) {
+        //             throw new RfmCertificateException("Certificate found, but private key is unavailable. Alias: " + alias);
+        //         }
+
+        //         return alias;
+        //     }
+        // }
+
+        // throw new RfmCertificateException(
+        //         "Certificate not found in CryptoPro key store. Serial: " + Masking.serial(serialNumber)
+        // );
+        // Ожидаемый серийный номер (убираем пробелы)
+        String expected = serialNumber.replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
+        log.debug("Looking for serial: {}", expected);
+        
         Enumeration<String> aliases = keyStore.aliases();
         while (aliases.hasMoreElements()) {
             String alias = aliases.nextElement();
             Certificate certificate = keyStore.getCertificate(alias);
-
+            
             if (!(certificate instanceof X509Certificate x509)) {
                 continue;
             }
-
-            // Правильное получение серийного номера через байты
+            
+            // Получаем серийный номер в разных форматах
+            String serialHex = x509.getSerialNumber().toString(16).toLowerCase(Locale.ROOT);
+            
             byte[] bytes = x509.getSerialNumber().toByteArray();
-            StringBuilder hex = new StringBuilder();
+            StringBuilder hexBytes = new StringBuilder();
             for (byte b : bytes) {
-                hex.append(String.format("%02x", b & 0xFF));
+                hexBytes.append(String.format("%02x", b & 0xFF));
             }
-
-            String actual = normalizeSerial(x509.getSerialNumber().toString(16));
-
-            if (actual.equals(expected)) {
+            String serialBytes = hexBytes.toString();
+            
+            log.debug("Comparing - expected: {}, hex: {}, bytes: {}", expected, serialHex, serialBytes);
+            
+            // Сравниваем в разных форматах
+            if (serialHex.equals(expected) || serialBytes.equals(expected)) {
                 if (!keyStore.isKeyEntry(alias)) {
                     throw new RfmCertificateException("Certificate found, but private key is unavailable. Alias: " + alias);
                 }
-
                 return alias;
             }
         }
-
-        throw new RfmCertificateException(
-                "Certificate not found in CryptoPro key store. Serial: " + Masking.serial(serialNumber)
-        );
+        
+        throw new RfmCertificateException("Certificate not found in CryptoPro key store. Serial: " + Masking.serial(serialNumber));
     }
 
     private String normalizeSerial(String value) {
