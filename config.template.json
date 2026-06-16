@@ -14,12 +14,17 @@
     "CryptoPro": {
         "ProviderClasses": [
             "ru.CryptoPro.JCP.JCP",
+            "ru.CryptoPro.JCSP.JCSP",
             "ru.CryptoPro.Crypto.CryptoProvider",
             "ru.CryptoPro.ssl.Provider"
         ],
-        "KeyStoreType": "HDImageStore",
-        "SslProtocol": "GostTLS",
-        "SslProvider": "JTLS"
+        "KeyStoreType": "REGISTRY",
+            "KeyStoreProvider": "JCSP",
+            "TrustStoreType": "WINDOWS-ROOT",
+            "TrustStoreProvider": "SunMSCAPI",
+            "SslProtocol": "GostTLS",
+            "SslProvider": "JTLS",
+            "SignatureAlgorithm": "GOST3411-2012withGOST3410-2012-256"
     }
   },
   "Logging": {
