@@ -18,12 +18,12 @@
     "CertPfxPassword": "",
     "UseCryptoPro": true,
     "CryptoPro": {
-        "ProviderClasses": [
-          "ru.CryptoPro.JCP.JCP",
-          "ru.CryptoPro.JCSP.JCSP",
-          "ru.CryptoPro.Crypto.CryptoProvider",
-          "ru.CryptoPro.ssl.Provider"
-        ],
+      "ProviderClasses": [
+        "ru.CryptoPro.JCP.JCP",
+        "ru.CryptoPro.JCSP.JCSP",
+        "ru.CryptoPro.Crypto.CryptoProvider",
+        "ru.CryptoPro.ssl.Provider"
+      ],
       "KeyStoreType": "REGISTRY",
       "KeyStoreProvider": "JCSP",
 

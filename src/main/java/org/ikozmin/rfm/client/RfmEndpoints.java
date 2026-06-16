@@ -1,23 +1,24 @@
 package org.ikozmin.rfm.client;
 
 import org.ikozmin.rfm.model.CatalogType;
+import org.ikozmin.rfm.model.Contour;
 
 public final class RfmEndpoints {
     private static final String BASE_URL = "https://portal.fedsfm.ru:8081/Services/fedsfm-service";
     //private static final String BASE_URL = "https://portal.fedsfm.ru/Services/fedsfm-service";
 
-    private final boolean production;
+    private final Contour contour;
 
-    public RfmEndpoints(boolean production) {
-        this.production = production;
+    public RfmEndpoints(Contour contour) {
+        this.contour = contour;
     }
 
     public String authenticateUrl() {
-        return BASE_URL + (production ? "/authenticate" : "/test-contur/authenticate");
+        return BASE_URL + (contour.isProduction() ? "/authenticate" : "/test-contur/authenticate");
     }
 
     public String catalogUrl(CatalogType catalogType) {
-        if (!production) {
+        if (!contour.isProduction()) {
             return switch (catalogType) {
                 case TE2, TE21 -> BASE_URL + "/test-contur/suspect-catalogs/current-te2-catalog";
                 case MVK -> BASE_URL + "/test-contur/suspect-catalogs/current-mvk-catalog";
@@ -37,7 +38,7 @@ public final class RfmEndpoints {
     }
 
     public String fileUrl(CatalogType catalogType) {
-        if (!production) {
+        if (!contour.isProduction()) {
             return switch (catalogType) {
                 case TE2, TE21 -> BASE_URL + "/test-contur/suspect-catalogs/current-te2-file";
                 case MVK -> BASE_URL + "/test-contur/suspect-catalogs/current-mvk-file-zip";
@@ -53,5 +54,9 @@ public final class RfmEndpoints {
             case UN, UN_RUS -> BASE_URL + "/suspect-catalogs/current-un-file";
             default -> throw new IllegalArgumentException("Unsupported catalog: " + catalogType);
         };
+    }
+
+    public Contour getContour() {
+        return contour;
     }
 }

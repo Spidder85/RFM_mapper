@@ -17,6 +17,7 @@ import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.service.RegistryUpdateService;
 import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
+import org.ikozmin.rfm.model.Contour;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +45,9 @@ public final class Main {
         ConfigLoader configLoader = new ConfigLoader();
         AppConfig config = configLoader.load(configPath);
 
-        boolean production = cli.production != null ? cli.production : !config.isUseTestContour();
+        Contour contour = cli.contour != null
+                ? cli.contour
+                : Contour.from(config.isUseTestContour());
 
         CatalogType catalogType = cli.catalog != null
             ? CatalogType.from(cli.catalog)
@@ -53,7 +56,7 @@ public final class Main {
         log.info("Запуск программы");
         log.info("Путь к конфигу: {}", configPath.toAbsolutePath());
         log.info("Каталог для выгрузки: {}", outputDir.toAbsolutePath());
-        log.info("Контур: {}", production ? "prod" : "test");
+        log.info("Contour: {}", contour);
         log.info("Каталог: {}", catalogType.getCode());
         log.info("Серийный номер сертификата: {}", Masking.serial(configLoader.certificateSerial(config)));
 
@@ -72,7 +75,7 @@ public final class Main {
 
         RfmApiClient apiClient = new RfmApiClient(
             httpClient,
-            new RfmEndpoints(production)
+            new RfmEndpoints(contour)
         );
 
         apiClient.authenticate(
@@ -105,7 +108,7 @@ public final class Main {
         private Path configPath;
         private Path outputDir;
         private String catalog;
-        private Boolean production;
+        private Contour contour;
 
         private static Cli parse(String[] args) {
             Cli cli = new Cli();
@@ -127,11 +130,13 @@ public final class Main {
                         cli.catalog = requireValue(args, ++i, arg);
                         break;
                     case "--prod":
-                        cli.production = true;
+                        cli.contour = Contour.PROD;
                         break;
                     case "--test":
-                        cli.production = false;
+                        cli.contour = Contour.TEST;
                         break;
+                    case "--contour":
+                        cli.contour = Contour.fromCliValue(requireValue(args, ++i, arg));
                     case "-h":
                     case "--help":
                         printHelpAndExit();
@@ -162,6 +167,7 @@ public final class Main {
             System.out.println("  -k, --catalog <code>   te2, te21, mvk, un, un-rus");
             System.out.println("      --prod             Use production contour");
             System.out.println("      --test             Use test contour");
+            System.out.println("      --contour <value>  prod or test");
             System.out.println("  -h, --help             Show help");
             System.exit(0);
         }
