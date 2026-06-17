@@ -3,8 +3,8 @@ package org.ikozmin.rfm.client;
 import org.ikozmin.rfm.model.CatalogType;
 
 public final class RfmEndpoints {
-    // private static final String BASE_URL = "https://portal.fedsfm.ru:8081/Services/fedsfm-service";
-    private static final String BASE_URL = "https://portal.fedsfm.ru/Services/fedsfm-service";
+    private static final String BASE_URL = "https://portal.fedsfm.ru:8081/Services/fedsfm-service";
+    //private static final String BASE_URL = "https://portal.fedsfm.ru/Services/fedsfm-service";
 
     private final boolean production;
 
