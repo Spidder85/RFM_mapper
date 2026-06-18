@@ -10,11 +10,11 @@ import org.ikozmin.rfm.model.AuthRequest;
 import org.ikozmin.rfm.model.AuthResponse;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
-import org.ikozmin.rfm.logging.Masking;
 import org.ikozmin.rfm.audit.AuditEnvelope;
 import org.ikozmin.rfm.audit.AuditWriter;
 import java.time.LocalDateTime;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -32,6 +32,7 @@ public final class RfmApiClient implements RfmClient {
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final SSLContext sslContext;
     private final RfmEndpoints endpoints;
 
     private String accessToken;
@@ -39,9 +40,10 @@ public final class RfmApiClient implements RfmClient {
     private final ResponseValidator responseValidator;
     private final AuditWriter auditWriter;
 
-    public RfmApiClient(HttpClient httpClient, RfmEndpoints endpoints, AuditWriter auditWriter) {
+    public RfmApiClient(HttpClient httpClient, SSLContext sslContext, RfmEndpoints endpoints, AuditWriter auditWriter) {
         this.objectMapper = new ObjectMapper();
         this.httpClient = httpClient;
+        this.sslContext = sslContext;
         this.endpoints = endpoints;
         this.responseValidator = new ResponseValidator();
         this.auditWriter = auditWriter;
@@ -107,31 +109,33 @@ public final class RfmApiClient implements RfmClient {
         try {
             log.info("Requesting catalog. type={}, url={}", catalogType.getCode(), url);
 
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .timeout(java.time.Duration.ofMinutes(2))
-                    .header("Accept", "application/json")
-                    .header("Authorization", "Bearer " + accessToken)
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build();
+            EmptyBodyResponse emptyResponse = sendEmptyBodyPostWithStatus(url);
 
-            HttpResponse<String> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-            );
+//            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+//                    .timeout(java.time.Duration.ofMinutes(2))
+//                    .header("Accept", "application/json")
+//                    .header("Authorization", "Bearer " + accessToken)
+//                    .POST(HttpRequest.BodyPublishers.noBody())
+//                    .build();
+//
+//            HttpResponse<String> response = httpClient.send(
+//                    request,
+//                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+//            );
 
-            requireSuccess(response.statusCode(), response.body(), url);
+//            requireSuccess(response.statusCode(), response.body(), url);
 
             writeAudit(
                     auditCatalogResponseFileName(catalogType),
                     "POST",
                     url,
                     "",
-                    response.statusCode(),
-                    response.body(),
+                    emptyResponse.getStatusCode(),
+                    emptyResponse.getBody(),
                     "Catalog response"
             );
 
-            CatalogInfo catalogInfo = objectMapper.readValue(response.body(), CatalogInfo.class);
+            CatalogInfo catalogInfo = objectMapper.readValue(emptyResponse.getBody(), CatalogInfo.class);
             String idXml = catalogInfo.requireIdXml();
 
             log.info("Catalog received. type={}, idXml={}, date={}, active={}",
@@ -143,9 +147,9 @@ public final class RfmApiClient implements RfmClient {
             return catalogInfo;
         } catch (IOException e) {
             throw new RfmApiException("Catalog request I/O error. URL: " + url, -1, e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RfmApiException("Catalog request interrupted. URL: " + url, -1, e.getMessage());
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//            throw new RfmApiException("Catalog request interrupted. URL: " + url, -1, e.getMessage());
         }
     }
 
@@ -258,7 +262,7 @@ public final class RfmApiClient implements RfmClient {
         auditWriter.write(
                 fileName,
                 new AuditEnvelope(
-                        LocalDateTime.now(),
+                        LocalDateTime.now().toString(),
                         method,
                         url,
                         requestBody,
@@ -287,5 +291,76 @@ public final class RfmApiClient implements RfmClient {
             case UN_RUS -> "9_ReqUN_RUS.json";
             default -> catalogType.getCode() + "_file_request.json";
         };
+    }
+
+    // отдельный метод для запросов с пустым телом
+    private EmptyBodyResponse sendEmptyBodyPostWithStatus(String url) throws IOException {
+        java.net.URL requestUrl = new java.net.URL(url);
+        javax.net.ssl.HttpsURLConnection connection = (javax.net.ssl.HttpsURLConnection) requestUrl.openConnection();
+
+        connection.setSSLSocketFactory(sslContext.getSocketFactory());
+
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Accept", "application/json");
+        connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+        connection.setRequestProperty("Content-Length", "0");
+        connection.setDoOutput(true);
+        connection.setConnectTimeout(30000);
+        connection.setReadTimeout(60000);
+
+        connection.getOutputStream().close();
+
+        int responseCode = connection.getResponseCode();
+        String responseBody;
+
+        java.io.InputStream is = null;
+        try {
+            if (responseCode >= 200 && responseCode < 300) {
+                is = connection.getInputStream();
+            } else {
+                is = connection.getErrorStream();
+                // Если errorStream null, используем inputStream
+                if (is == null) {
+                    is = connection.getInputStream();
+                }
+            }
+
+            // Если всё ещё null — тело пустое
+            if (is == null) {
+                responseBody = "";
+            } else {
+                try (java.util.Scanner scanner = new java.util.Scanner(is, StandardCharsets.UTF_8.name())) {
+                    responseBody = scanner.useDelimiter("\\A").hasNext() ? scanner.next() : "";
+                }
+            }
+        } finally {
+            if (is != null) {
+                try { is.close(); } catch (IOException ignored) { /* игнорируем */ }
+            }
+        }
+
+        if (responseCode < 200 || responseCode >= 300) {
+            throw new IOException("HTTP " + responseCode + ": " + responseBody);
+        }
+
+        return new EmptyBodyResponse(responseCode, responseBody);
+    }
+
+    private static final class EmptyBodyResponse {
+        private final int statusCode;
+        private final String body;
+
+        public EmptyBodyResponse(int statusCode, String body) {
+            this.statusCode = statusCode;
+            this.body = body;
+        }
+
+        public int getStatusCode() {
+            return statusCode;
+        }
+
+        public String getBody() {
+            return body;
+        }
     }
 }

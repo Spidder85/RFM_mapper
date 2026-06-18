@@ -15,7 +15,8 @@ public final class AuditWriter {
     private final Path auditDir;
 
     public AuditWriter(Path auditDir) {
-        this.objectMapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+        this.objectMapper = new ObjectMapper()
+                .enable(SerializationFeature.INDENT_OUTPUT);
         this.auditDir = auditDir;
     }
 

@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamReader;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.zip.ZipEntry;
@@ -24,7 +25,9 @@ public final class RegistryFileValidator {
     }
 
     private void validateZip(Path file) {
-        try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(file))) {
+        try (ZipInputStream zipInputStream = new ZipInputStream(
+                Files.newInputStream(file),
+                Charset.forName("CP866"))) {
             ZipEntry entry = zipInputStream.getNextEntry();
 
             if (entry == null) {

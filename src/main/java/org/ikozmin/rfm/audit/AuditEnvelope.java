@@ -3,7 +3,7 @@ package org.ikozmin.rfm.audit;
 import java.time.LocalDateTime;
 
 public final class AuditEnvelope {
-    private final LocalDateTime createdAt;
+    private final String createdAt;
     private final String method;
     private final String url;
     private final String requestBody;
@@ -12,7 +12,7 @@ public final class AuditEnvelope {
     private final String note;
 
     public AuditEnvelope(
-            LocalDateTime createdAt,
+            String createdAt,
             String method,
             String url,
             String requestBody,
@@ -29,7 +29,7 @@ public final class AuditEnvelope {
         this.note = note;
     }
 
-    public LocalDateTime getCreatedAt() {
+    public String getCreatedAt() {
         return createdAt;
     }
 

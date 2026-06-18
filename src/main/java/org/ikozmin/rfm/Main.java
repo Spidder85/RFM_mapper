@@ -75,13 +75,14 @@ public final class Main {
                 .loadFromWindowsMy(configLoader.certificateSerial(config));
         }
         
-        HttpClient httpClient = new RfmHttpClientFactory()
-            .create(certificate, config.getCertificate());
+        RfmHttpClientFactory factory = new RfmHttpClientFactory();
+        HttpClient httpClient = factory.create(certificate, config.getCertificate());
 
         AuditWriter auditWriter = new AuditWriter(outputDir.resolve("audit"));
 
         RfmApiClient apiClient = new RfmApiClient(
                 httpClient,
+                factory.getSslContext(),
                 new RfmEndpoints(contour),
                 auditWriter
         );

@@ -13,9 +13,8 @@ public final class CryptoProProviderRegistrar {
     private static final Logger log = LoggerFactory.getLogger(CryptoProProviderRegistrar.class);
 
     private static final String[] DEFAULT_PROVIDER_CLASSES = {
-        "ru.CryptoPro.JCP.JCP",
         "ru.CryptoPro.JCSP.JCSP",
-        "ru.CryptoPro.RevCheck.RevCheck",
+        "ru.CryptoPro.JCP.JCP",
         "ru.CryptoPro.Crypto.CryptoProvider",
         "ru.CryptoPro.ssl.Provider"
     };
@@ -50,8 +49,49 @@ public final class CryptoProProviderRegistrar {
             }
         }
 
+        // ========== ПРИНУДИТЕЛЬНАЯ УСТАНОВКА ПОРЯДКА ПРОВАЙДЕРОВ ==========
+        try {
+            Provider jcsp = Security.getProvider("JCSP");
+            Provider jcp = Security.getProvider("JCP");
+
+            if (jcsp != null && jcp != null) {
+                Security.removeProvider("JCSP");
+                Security.removeProvider("JCP");
+                Security.insertProviderAt(jcsp, 1);
+                Security.insertProviderAt(jcp, 2);
+                log.info("Providers reordered: JCSP at position 1, JCP at position 2");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to reorder providers: {}", e.getMessage());
+        }
+
         if (loaded.isEmpty()) {
             throw new RfmCertificateException("No CryptoPro providers were registered. Failed classes: " + failed);
+        }
+
+        // регистрация алгоритмов подписи
+        try {
+            Provider jcspProvider = Security.getProvider("JCSP");
+            if (jcspProvider != null) {
+                String[] algorithms = {
+                    "GOST3411-2012withGOST3410-2012-256",
+                    "GOST3411withGOST3410EL",
+                    "GOST3411withGOST3410",
+                    "GOST3411-2012withGOST3410-2012"
+                };
+
+                for (String alg : algorithms) {
+                    try {
+                        jcspProvider.put("Signature." + alg, "ru.CryptoPro.JCP.Sign.cl_0");
+                        log.info("Added signature algorithm to JCSP: {}", alg);
+                    } catch (Exception e) {
+                        log.debug("Could not add algorithm {}: {}", alg, e.getMessage());
+                    }
+                }
+                log.info("JCSP signature algorithms configured");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to configure JCSP signature algorithms: {}", e.getMessage());
         }
 
         log.info("CryptoPro providers ready: {}", loaded);
