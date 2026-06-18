@@ -1,10 +1,11 @@
-{
+//{
 //  "Credentials": {
 //    "UserName": "YOUR_RFM_USERNAME",
 //    "Password": "YOUR_RFM_PASSWORD"
 //  },
 //  "Certificate": {
 //    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
+{
   "Credentials": {
     "UserName": "1660055801165501001",
     "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
@@ -19,22 +20,15 @@
     "UseCryptoPro": true,
     "CryptoPro": {
       "ProviderClasses": [
-        "ru.CryptoPro.JCP.JCP",
         "ru.CryptoPro.JCSP.JCSP",
+        "ru.CryptoPro.JCP.JCP",
         "ru.CryptoPro.Crypto.CryptoProvider",
         "ru.CryptoPro.ssl.Provider"
       ],
       "KeyStoreType": "REGISTRY",
       "KeyStoreProvider": "JCSP",
-
-      "KeyManagerAlgorithm": "GostX509",
-      "KeyManagerProvider": "JTLS",
-
-      "TrustStoreType": "Windows-ROOT",
+      "TrustStoreType": "WINDOWS-ROOT",
       "TrustStoreProvider": "SunMSCAPI",
-      "TrustManagerAlgorithm": "PKIX",
-      "TrustManagerProvider": "",
-
       "SslProtocol": "GostTLSv1.2",
       "SslProvider": "JTLS"
     }

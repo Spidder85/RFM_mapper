@@ -28,9 +28,9 @@ echo.
     -cp "rfm-client.jar;libs\*" ^
     org.ikozmin.rfm.Main ^
     --config config.json ^
-    --prod ^
-    --catalog te21 ^
-    --out downloads
+    --test ^
+    --catalog mvk ^
+    --out out-test-access
 
 echo.
 echo === Exit code: %ERRORLEVEL% ===
