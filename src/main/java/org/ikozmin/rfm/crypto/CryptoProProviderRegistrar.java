@@ -50,17 +50,24 @@ public final class CryptoProProviderRegistrar {
             }
         }
 
-        // ========== НОВЫЙ БЛОК: РУЧНАЯ РЕГИСТРАЦИЯ JTLS ==========
+        // ========== ПРИНУДИТЕЛЬНАЯ УСТАНОВКА ПОРЯДКА ПРОВАЙДЕРОВ ==========
         try {
-            if (Security.getProvider("JTLS") == null) {
-                Class<?> jtlsClass = Class.forName("ru.CryptoPro.ssl.Provider");
-                Provider jtlsProvider = (Provider) jtlsClass.getDeclaredConstructor().newInstance();
-                Security.addProvider(jtlsProvider);
-                log.info("CryptoPro provider registered manually. name=JTLS, class=ru.CryptoPro.ssl.Provider");
-                loaded.add("JTLS");
+            // Удаляем JCSP и JCP
+            Provider jcsp = Security.getProvider("JCSP");
+            Provider jcp = Security.getProvider("JCP");
+
+            if (jcsp != null && jcp != null) {
+                Security.removeProvider("JCSP");
+                Security.removeProvider("JCP");
+
+                // Добавляем JCSP на первое место, JCP на второе
+                Security.insertProviderAt(jcsp, 1);
+                Security.insertProviderAt(jcp, 2);
+
+                log.info("Providers reordered: JCSP at position 1, JCP at position 2");
             }
         } catch (Exception e) {
-            log.warn("Failed to register JTLS provider manually: {}", e.getMessage());
+            log.warn("Failed to reorder provider: {}", e.getMessage());
         }
         // ==========================================================
 

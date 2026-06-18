@@ -23,6 +23,8 @@ import org.slf4j.LoggerFactory;
 public final class RfmHttpClientFactory {
     private static final Logger log = LoggerFactory.getLogger(RfmHttpClientFactory.class);
 
+    private SSLContext sslContext;
+
     public HttpClient create(ClientCertificate certificate, AppConfig.Certificate certificateConfig) {
         if (certificateConfig.isUseCryptoPro()) {
             return createCryptoProClient(certificate, certificateConfig.getCryptoPro());
@@ -34,7 +36,7 @@ public final class RfmHttpClientFactory {
         try {
             log.info("Creating default Java TLS HTTP client");
 
-            SSLContext sslContext = createSslContext(
+            this.sslContext = createSslContext(
                 certificate,
                 "TLS",
                 null
@@ -61,7 +63,7 @@ public final class RfmHttpClientFactory {
                 sslProtocol,
                 sslProvider == null ? "<default>" : sslProvider);
 
-            SSLContext sslContext = createSslContext(
+            this.sslContext = createSslContext(
                 certificate,
                 sslProtocol,
                 sslProvider
@@ -149,5 +151,9 @@ public final class RfmHttpClientFactory {
 
     private static String trimToNull(String value) {
         return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    public SSLContext getSslContext() {
+        return sslContext;
     }
 }

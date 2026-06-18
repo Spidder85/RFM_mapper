@@ -11,6 +11,7 @@ import org.ikozmin.rfm.model.AuthResponse;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 
+import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -24,13 +25,15 @@ public final class RfmApiClient {
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final SSLContext sslContext;
     private final RfmEndpoints endpoints;
 
     private String accessToken;
 
-    public RfmApiClient(HttpClient httpClient, RfmEndpoints endpoints) {
+    public RfmApiClient(HttpClient httpClient, SSLContext sslContext, RfmEndpoints endpoints) {
         this.objectMapper = new ObjectMapper();
         this.httpClient = httpClient;
+        this.sslContext = sslContext;
         this.endpoints = endpoints;
     }
 
@@ -83,6 +86,59 @@ public final class RfmApiClient {
         }
     }
 
+    // отдельный метод для запросов с пустым телом
+    private String sendEmptyBodyPost(String url) throws IOException {
+        java.net.URL requestUrl = new java.net.URL(url);
+        javax.net.ssl.HttpsURLConnection connection = (javax.net.ssl.HttpsURLConnection) requestUrl.openConnection();
+
+        connection.setSSLSocketFactory(sslContext.getSocketFactory());
+
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Accept", "application/json");
+        connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+        connection.setRequestProperty("Content-Length", "0");
+        connection.setDoOutput(true);
+        connection.setConnectTimeout(30000);
+        connection.setReadTimeout(60000);
+
+        connection.getOutputStream().close();
+
+        int responseCode = connection.getResponseCode();
+        String responseBody;
+
+        java.io.InputStream is = null;
+        try {
+            if (responseCode >= 200 && responseCode < 300) {
+                is = connection.getInputStream();
+            } else {
+                is = connection.getErrorStream();
+                // Если errorStream null, используем inputStream
+                if (is == null) {
+                    is = connection.getInputStream();
+                }
+            }
+
+            // Если всё ещё null — тело пустое
+            if (is == null) {
+                responseBody = "";
+            } else {
+                try (java.util.Scanner scanner = new java.util.Scanner(is, StandardCharsets.UTF_8.name())) {
+                    responseBody = scanner.useDelimiter("\\A").hasNext() ? scanner.next() : "";
+                }
+            }
+        } finally {
+            if (is != null) {
+                try { is.close(); } catch (IOException ignored) {}
+            }
+        }
+
+        if (responseCode < 200 || responseCode >= 300) {
+            throw new IOException("HTTP " + responseCode + ": " + responseBody);
+        }
+
+        return responseBody;
+    }
+
     public CatalogInfo getCatalog(CatalogType catalogType) {
         requireAuthenticated();
 
@@ -91,20 +147,23 @@ public final class RfmApiClient {
         try {
             log.info("Requesting catalog. type={}, url={}", catalogType.getCode(), url);
 
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                    .header("Accept", "application/json")
-                    .header("Authorization", "Bearer " + accessToken)
-                    .POST(HttpRequest.BodyPublishers.noBody())
-                    .build();
+            String responseBody = sendEmptyBodyPost(url);
 
-            HttpResponse<String> response = httpClient.send(
-                    request,
-                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-            );
+//            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+//                    .header("Accept", "application/json")
+//                    .header("Authorization", "Bearer " + accessToken)
+//                    .POST(HttpRequest.BodyPublishers.ofString("", StandardCharsets.UTF_8))
+//                    .build();
+//
+//            HttpResponse<String> response = httpClient.send(
+//                    request,
+//                    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+//            );
 
-            requireSuccess(response.statusCode(), response.body(), url);
+//            requireSuccess(response.statusCode(), response.body(), url);
 
-            CatalogInfo catalogInfo = objectMapper.readValue(response.body(), CatalogInfo.class);
+            CatalogInfo catalogInfo = objectMapper.readValue(responseBody, CatalogInfo.class);
+            //CatalogInfo catalogInfo = objectMapper.readValue(response.body(), CatalogInfo.class);
             String idXml = catalogInfo.requireIdXml();
 
             log.info("Catalog received. type={}, idXml={}, date={}, active={}",
@@ -116,9 +175,9 @@ public final class RfmApiClient {
             return catalogInfo;
         } catch (IOException e) {
             throw new RfmApiException("Catalog request I/O error. URL: " + url, -1, e.getMessage());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new RfmApiException("Catalog request interrupted. URL: " + url, -1, e.getMessage());
+//        } catch (InterruptedException e) {
+//            Thread.currentThread().interrupt();
+//            throw new RfmApiException("Catalog request interrupted. URL: " + url, -1, e.getMessage());
         }
     }
 

@@ -66,12 +66,13 @@ public final class Main {
             certificate = new CertificateLoader()
                 .loadFromWindowsMy(configLoader.certificateSerial(config));
         }
-        
-        HttpClient httpClient = new RfmHttpClientFactory()
-            .create(certificate, config.getCertificate());
+
+        RfmHttpClientFactory factory = new RfmHttpClientFactory();
+        HttpClient httpClient = factory.create(certificate, config.getCertificate());
 
         RfmApiClient apiClient = new RfmApiClient(
             httpClient,
+            factory.getSslContext(),
             new RfmEndpoints(production)
         );
 
