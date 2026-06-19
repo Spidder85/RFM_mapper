@@ -31,5 +31,21 @@
     "LogLevel": "INFO"
   },
   "DefaultCatalog": "te21",
-  "UseTestContour": false
+  "UseTestContour": false,
+  "Notifications": {
+    "Enabled": "true",
+    "SmtpHost": "smtp.your-company.ru",
+    "SmtpPort": "25",
+    "SmtpUsername": "noreply@your-company.ru",
+    "SmtpPassword": "your-password",
+    "UseTls": "false",
+    "From": "noreply@your-company.ru",
+    "To": [
+      "admin1@your-company.ru",
+      "admin2@your-company.ru"
+    ],
+    "Subject": "RFM Client Notification",
+    "IncludeAttachment": "false",
+    "IncludeFileChecksum": "true"
+  }
 }

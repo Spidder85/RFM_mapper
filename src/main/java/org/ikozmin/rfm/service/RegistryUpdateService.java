@@ -28,16 +28,20 @@ public final class RegistryUpdateService {
     private final DownloadRequestIdResolver downloadRequestIdResolver;
     private final RegistryFileValidator registryFileValidator;
 
+    private final EmailNotificationService notificationService;
+
     public RegistryUpdateService(
         RfmClient apiClient,
         RegistryStateStore stateStore,
-        Path outputDir
+        Path outputDir,
+        EmailNotificationService notificationService
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
         this.outputDir = outputDir;
         this.downloadRequestIdResolver = new DownloadRequestIdResolver();
         this.registryFileValidator = new RegistryFileValidator();
+        this.notificationService = notificationService;
     }
 
     public UpdateResult update(CatalogType catalogType) {
@@ -81,6 +85,19 @@ public final class RegistryUpdateService {
         );
 
         stateStore.save(catalogType, newState);
+
+        // отправка уведомленияоб обновлениин на почту
+        if (notificationService != null && notificationService.isEnabled()) {
+            String oldIdXml = currentState == null ? null : currentState.getIdXml();
+            notificationService.sendUpdateNotification(
+                    catalogType.getCode(),
+                    remoteIdXml,
+                    savedFile,
+                    sha256,
+                    oldIdXml
+
+            );
+        }
 
         log.info("Registry file checksum calculated. catalog={}, sha256={}",
                 catalogType.getCode(),
