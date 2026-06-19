@@ -155,6 +155,7 @@ public final class Main {
                         break;
                     case "--contour":
                         cli.contour = Contour.fromCliValue(requireValue(args, ++i, arg));
+                        break;
                     case "-h":
                     case "--help":
                         printHelpAndExit();
