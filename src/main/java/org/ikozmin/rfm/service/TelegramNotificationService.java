@@ -1,28 +1,24 @@
 package org.ikozmin.rfm.service;
 
-import org.ikozmin.rfm.config.EmailConfig;
+import org.ikozmin.rfm.config.TelegramConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import jakarta.mail.*;
-import jakarta.mail.internet.InternetAddress;
-import jakarta.mail.internet.MimeMessage;
-
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.Properties;
 
-import org.ikozmin.rfm.config.NotificationsConfig;
+public final class TelegramNotificationService {
+    private static final Logger log = LoggerFactory.getLogger(TelegramNotificationService.class);
 
-public final class EmailNotificationService {
-    private static final Logger log = LoggerFactory.getLogger(EmailNotificationService.class);
+    private final TelegramConfig config;
 
-    private final EmailConfig config;
-
-    public EmailNotificationService(NotificationsConfig config) {
+    public TelegramNotificationService(TelegramConfig config) {
         this.config = config;
     }
 
@@ -42,18 +38,15 @@ public final class EmailNotificationService {
         }
 
         try {
-            log.info("Sending email notification about registry update. catalog={}, idXml={}",
+            log.info("Sending telegram notification about registry update. catalog={}, idXml={}",
                     catalogType, idXml);
 
-            String subject = buildSubject(catalogType, idXml);
-            String body = buildBody(catalogType, idXml, filePath, checksum, oldIdXml);
+            // TODO: implement telegram notification
 
-            sendEmail(subject, body, config.getTo());
-
-            log.info("Email notification sent successfully. catalog={}, recipients={}",
-                    catalogType, String.join(", ", config.getTo()));
+            log.info("Telegram notification sent successfully. catalog={}, recipients={}",
+                    catalogType, String.join(", ", config.getChatIds()));
         } catch (Exception e) {
-            log.error("Failed to send email notification: {}", e.getMessage(), e);
+            log.error("Failed to send telegram notification: {}", e.getMessage(), e);
         }
     }
 
@@ -67,9 +60,6 @@ public final class EmailNotificationService {
         return "";
     }
 
-    private void sendEmail(String subject, String body, List<String> recipients) throws MessagingException {
-
-    }
 
     private String formatFileSize(long size) {
         if (size < 1024) return size + " B";

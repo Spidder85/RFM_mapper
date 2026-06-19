@@ -1,0 +1,37 @@
+package org.ikozmin.rfm.config;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.List;
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+public final class TelegramConfig {
+    @JsonProperty("enabled")
+    private boolean enabled;
+
+    @JsonProperty("token")
+    private String token;
+
+    @JsonProperty("chatIds")
+    private List<String> chatIds;
+
+    @JsonProperty("include_file_checksum")
+    private boolean includeFileChecksum;
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public List<String> getChatIds() {
+        return chatIds;
+    }
+
+    public boolean isIncludeFileChecksum() {
+        return includeFileChecksum;
+    }
+}
