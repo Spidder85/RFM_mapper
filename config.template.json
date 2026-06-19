@@ -54,7 +54,8 @@
       "Enabled": "true",
       "Token": "YOUR_TELEGRAM_BOT_TOKEN",
       "ChatId": [
-        "YOUR_TELEGRAM_CHAT_ID"
+        "YOUR_TELEGRAM_CHAT_ID1",
+        "YOUR_TELEGRAM_CHAT_ID2"
       ],
       "IncludeFileChecksum": "true"
     }
