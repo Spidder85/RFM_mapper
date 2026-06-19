@@ -1,59 +1,110 @@
 # RFM Client
 
-Java client for the Rosfinmonitoring Service Concentrator API.
+RFM Client is a command-line Java application for working with the Rosfinmonitoring Service Concentrator API.
 
-The application authenticates through the API, checks whether a registry has a
-new `idXml`, downloads the registry file when it changed, validates the file,
-stores local state, and writes audit envelopes needed for access requests.
+The application checks whether a registry has been updated, downloads the current file when a new version is available, validates the downloaded file, saves local state, and can notify users by email and Telegram.
 
-## Supported Catalogs
+## What The Application Does
 
-```text
-te21    Terrorists/extremists registry v2.1
-te2     Terrorists/extremists legacy registry
-mvk     MVK freeze registry
-un      UN registry
-un-rus  UN registry, Russian version
-```
+- Authenticates in the Rosfinmonitoring API with a client certificate.
+- Checks the selected registry catalog.
+- Compares the remote `idXml` with the locally saved state.
+- Downloads the registry file only when a new version is available.
+- Saves the file atomically through a temporary `.part` file.
+- Validates downloaded ZIP/XML files.
+- Calculates SHA-256 checksum.
+- Stores local update state.
+- Writes audit JSON envelopes for API request/response confirmation.
+- Optionally sends update notifications by email and Telegram.
 
-For terrorists/extremists registry use `te21` by default. The legacy `te2`
-catalog is kept for compatibility with older API methods.
+## Supported Registries
+
+| Code | Registry |
+| --- | --- |
+| `te21` | Terrorists and extremists registry, current production version |
+| `te2` | Legacy terrorists and extremists registry |
+| `mvk` | MVK freeze registry |
+| `un` | UN registry |
+| `un-rus` | UN registry, Russian version |
+
+Default catalog: `te21`.
+
+## Technology Stack
+
+- Java 21 runtime environment.
+- Maven for build and distribution packaging.
+- Java HTTP Client and HTTPS connection APIs.
+- CryptoPro CSP/JCP/JTLS for GOST TLS and client certificate authentication.
+- Jackson for JSON serialization and configuration loading.
+- SLF4J + Logback for logging.
+- Jakarta Mail for email notifications.
+- Telegram Bot API for Telegram notifications.
+- picocli for command-line argument parsing.
+- JUnit 5, Mockito, AssertJ for tests.
+
+The project is intentionally implemented as a small scheduled command-line utility, not as a web service. This keeps deployment and hourly execution simple.
 
 ## Requirements
 
-- Java 17+
-- Maven
-- CryptoPro CSP/JCP installed
-- Client certificate with private key
-- Access to the required Rosfinmonitoring Service Concentrator methods
-
-Official API base URL from the documentation:
+- Java 21 installed on the execution machine.
+- Maven for building the project.
+- CryptoPro CSP/JCP installed and configured.
+- Client certificate with an accessible private key.
+- Access to the required Rosfinmonitoring Service Concentrator methods.
+- Network access to:
 
 ```text
 https://portal.fedsfm.ru:8081/Services/fedsfm-service
 ```
 
+For Telegram notifications, the machine must also have access to:
+
+```text
+https://api.telegram.org
+```
+
+## Project Structure
+
+```text
+src/main/java/org/ikozmin/rfm/
+  audit/      API audit envelope files
+  cert/       certificate loading and selection
+  client/     Rosfinmonitoring API client, endpoints, retry, TLS client factory
+  config/     application configuration models and loader
+  crypto/     CryptoPro provider registration
+  logging/    masking helpers
+  model/      API and domain models
+  service/    registry update logic, validation, notifications
+  storage/    local state and checksum helpers
+```
+
 ## Build
+
+Run from the `java` directory:
 
 ```powershell
 mvn clean package
 ```
 
-The Maven build creates a thin application jar and copies dependencies to:
+The build produces:
 
 ```text
+target/rfm-client.jar
 target/libs/
+target/distr/rfm-client-1.0.0.zip
 ```
+
+The application uses a thin jar plus dependencies from `libs`.
 
 ## Configuration
 
-Copy the template:
+Create a working config from the template:
 
 ```text
 config.template.json -> config.json
 ```
 
-Set credentials and certificate serial:
+Minimum configuration:
 
 ```json
 {
@@ -62,12 +113,18 @@ Set credentials and certificate serial:
     "Password": "YOUR_RFM_PASSWORD"
   },
   "Certificate": {
-    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER"
+    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
+    "UseCryptoPro": true
+  },
+  "DefaultCatalog": "te21",
+  "UseTestContour": false,
+  "Notifications": {
+    "Enabled": false
   }
 }
 ```
 
-Prefer environment variables for secrets:
+Secrets can also be provided through environment variables:
 
 ```text
 RFM_USERNAME
@@ -75,24 +132,80 @@ RFM_PASSWORD
 RFM_CERT_SERIAL
 ```
 
-`config.json`, private certificates, downloaded files, and logs must not be
-committed.
+Do not commit real `config.json`, private keys, downloaded registry files, or logs.
+
+## CryptoPro Settings
+
+The template contains an extended `CryptoPro` section for environments where explicit provider configuration is required.
+
+Typical values:
+
+```json
+"CryptoPro": {
+  "ProviderClasses": [
+    "ru.CryptoPro.JCSP.JCSP",
+    "ru.CryptoPro.JCP.JCP",
+    "ru.CryptoPro.Crypto.CryptoProvider",
+    "ru.CryptoPro.ssl.Provider"
+  ],
+  "KeyStoreType": "REGISTRY",
+  "KeyStoreProvider": "JCSP",
+  "TrustStoreType": "WINDOWS-ROOT",
+  "TrustStoreProvider": "SunMSCAPI",
+  "SslProtocol": "GostTLSv1.2",
+  "SslProvider": "JTLS"
+}
+```
+
+For most installations these values should not be changed after the connection is confirmed working.
 
 ## Run
 
-Production `te21`:
+Run production registry check:
 
 ```powershell
 java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --prod --catalog te21 --out downloads
 ```
 
-Test contour:
+Run test contour:
 
 ```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --test --catalog te21 --out downloads
+java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --test --catalog te2 --out downloads-test
 ```
 
+Show command-line help:
+
+```powershell
+java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --help
+```
+
+Available options:
+
+```text
+-c, --config <path>    path to config.json
+-o, --out <dir>        output directory
+-k, --catalog <code>   te2, te21, mvk, un, un-rus
+    --prod             production contour
+    --test             test contour
+    --contour <value>  prod or test
+```
+
+## Windows Script
+
+`run.bat` is intended for the packaged distribution where these files are in one directory:
+
+```text
+rfm-client.jar
+libs/
+config.json
+run.bat
+```
+
+The script starts the production `te21` check and writes output to `downloads`.
+
 ## Output
+
+Typical output directory:
 
 ```text
 downloads/
@@ -104,220 +217,143 @@ downloads/
     suspect_<date>_<id>.zip
 ```
 
-`state.properties` stores the last known registry id, file path, download time,
-and SHA-256 checksum. It is used to skip repeated downloads of the same
-registry.
+`state.properties` stores the last known registry id, downloaded file path, download time, and SHA-256 checksum. It is used to avoid downloading the same registry version repeatedly.
+
+Audit files are useful for diagnostics and for Rosfinmonitoring access procedures.
+
+## Notifications
+
+Notifications are optional and disabled when the `Notifications` block is absent or `Enabled` is `false`.
+
+Email and Telegram can be enabled independently.
+
+Email example:
+
+```json
+"Notifications": {
+  "Enabled": true,
+  "Email": {
+    "Enabled": true,
+    "SmtpHost": "smtp.your-company.ru",
+    "SmtpPort": 25,
+    "SmtpUsername": "",
+    "SmtpPassword": "",
+    "UseTls": false,
+    "From": "noreply@your-company.ru",
+    "To": [
+      "admin@your-company.ru"
+    ],
+    "Subject": "RFM registry updated",
+    "IncludeAttachment": false,
+    "IncludeFileChecksum": true
+  },
+  "Telegram": {
+    "Enabled": false
+  }
+}
+```
+
+Telegram example:
+
+```json
+"Notifications": {
+  "Enabled": true,
+  "Email": {
+    "Enabled": false
+  },
+  "Telegram": {
+    "Enabled": true,
+    "Token": "YOUR_TELEGRAM_BOT_TOKEN",
+    "ChatIds": [
+      "YOUR_TELEGRAM_CHAT_ID"
+    ],
+    "IncludeFileChecksum": true
+  }
+}
+```
+
+Notifications are sent only when a new registry file is actually downloaded. If the registry is already current, no update notification is sent.
+
+## Hourly Execution
+
+The application is designed to be launched by a scheduler, for example Windows Task Scheduler.
+
+Recommended scheduler behavior:
+
+- Run once per hour.
+- Use a stable working directory.
+- Keep `config.json`, `downloads`, and `logs` outside temporary folders.
+- Do not start a new instance if the previous run is still active.
+- Monitor process exit code and log file.
 
 ## Access Procedure
 
-According to Rosfinmonitoring FAQ:
+To receive access to production API methods:
 
-1. Request access to test methods through the Personal Account support form.
-2. Successfully call the test methods.
-3. Save request/response envelopes.
-4. Submit a production access request with a ZIP archive of those envelopes.
-5. Use production methods after approval.
+1. Request access to test methods through the Rosfinmonitoring Personal Account support form.
+2. Run the required test methods.
+3. Save the JSON request/response envelopes.
+4. Prepare the production access request form.
+5. Pack the form and required JSON envelopes into a ZIP archive.
+6. Send the archive through the support request for production access.
 
 The authentication request/response envelope is not required.
 
-## Implementation Notes
+## Logging
 
-This section records what was optimized and why, so future maintainers can see
-the intention behind the structure.
-
-### Step 1. Streaming Download, Atomic Writes, Response Checks
-
-Files:
+Logs are written to:
 
 ```text
-src/main/java/org/ikozmin/rfm/model/DownloadedFile.java
-src/main/java/org/ikozmin/rfm/client/ResponseValidator.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/storage/RegistryStateStore.java
+logs/rfm-client.log
 ```
 
-What was changed:
+Log rotation is configured by date and file size. Sensitive values such as token, certificate serial, and identifiers are masked in logs where possible.
 
-- Registry files are downloaded directly to a `.part` file instead of `byte[]`.
-- The `.part` file is moved to the final name only after a successful download.
-- `state.properties` is written through a temporary file and then moved over the
-  previous state file.
-- File responses are checked by HTTP status, size, and `Content-Type`.
-- Request timeouts are applied to API calls.
+## Exit Codes
 
-Why:
+The application maps common failure categories to exit codes through `ExitCode`:
 
-- Large ZIP/XML responses should not be kept fully in memory.
-- A failed process must not leave a final-looking partial registry file.
-- A failed state write must not corrupt the previous state.
-- HTML/JSON error pages must not be accepted as registry files.
+- configuration errors
+- certificate/TLS errors
+- authentication errors
+- API errors
+- general application errors
 
-### Step 2. CryptoPro TLS Settings and Contour Enum
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/model/Contour.java
-src/main/java/org/ikozmin/rfm/client/RfmEndpoints.java
-src/main/java/org/ikozmin/rfm/client/RfmHttpClientFactory.java
-src/main/java/org/ikozmin/rfm/config/AppConfig.java
-src/main/java/org/ikozmin/rfm/Main.java
-config.template.json
-```
-
-What was changed:
-
-- `boolean production` was replaced by `Contour.PROD` / `Contour.TEST`.
-- The official API URL with port `8081` is used.
-- CryptoPro/JTLS settings are configurable:
-  - SSL protocol/provider
-  - key manager algorithm/provider
-  - trust store type/provider
-  - trust manager algorithm/provider
-
-Why:
-
-- `Contour.PROD` and `Contour.TEST` are clearer than a boolean flag.
-- The official endpoint requires `:8081`.
-- CryptoPro deployments differ; TLS settings must be configurable without
-  recompiling.
-
-### Step 3. Secrets, PII, and Log Encoding
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/logging/Masking.java
-src/main/java/org/ikozmin/rfm/config/ConfigLoader.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/cert/CryptoProCertificateLoader.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/Main.java
-src/main/resources/logback.xml
-config.template.json
-.gitignore
-```
-
-What was changed:
-
-- Real credentials and certificate serials were removed from the template.
-- Logging masks username, token, serial number, and ids.
-- Certificate subject dumps were removed from INFO logs.
-- Log messages were normalized to English to avoid Windows console mojibake.
-- Logback package logger was aligned with `org.ikozmin.rfm`.
-
-Why:
-
-- Logs and templates must not expose secrets or personal data.
-- English log messages avoid encoding problems in batch files and consoles.
-- The logger package must match the actual Java package.
-
-### Step 4. Interfaces, Tests, Retry, Exit Codes, ID Resolver, SHA-256
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/client/RfmClient.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/client/RetryPolicy.java
-src/main/java/org/ikozmin/rfm/service/DownloadRequestIdResolver.java
-src/main/java/org/ikozmin/rfm/storage/Sha256.java
-src/main/java/org/ikozmin/rfm/storage/RegistryState.java
-src/main/java/org/ikozmin/rfm/storage/RegistryStateStore.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/ExitCode.java
-src/test/java/org/ikozmin/rfm/model/CatalogTypeTest.java
-src/test/java/org/ikozmin/rfm/client/RfmEndpointsTest.java
-src/test/java/org/ikozmin/rfm/service/DownloadRequestIdResolverTest.java
-pom.xml
-```
-
-What was changed:
-
-- `RfmClient` interface was introduced.
-- `RegistryUpdateService` depends on the interface, not the HTTP
-  implementation.
-- Retry policy was added for transient transport/API failures.
-- Exit codes were introduced for config, certificate, auth, API, and general
-  errors.
-- Download request id resolution was isolated in `DownloadRequestIdResolver`.
-- SHA-256 checksum is calculated for every downloaded registry file.
-- JUnit tests were added under `src/test/java`.
-
-Why:
-
-- Business logic can be tested without real network calls.
-- Transient network failures should not fail the whole run immediately.
-- Schedulers and scripts need meaningful exit codes.
-- `te2`, `te21`, `mvk`, and `un` may use different ids; that rule should be
-  explicit.
-- Checksums help detect corrupted or replaced files.
-- Tests guard endpoint construction and core decision rules.
-
-### Step 5. README, ZIP/XML Validation, Audit Envelopes
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/audit/AuditEnvelope.java
-src/main/java/org/ikozmin/rfm/audit/AuditWriter.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/service/RegistryFileValidator.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/Main.java
-README.md
-```
-
-What was changed:
-
-- JSON audit envelopes are saved for catalog responses and file requests.
-- Binary registry responses are not stored in audit JSON.
-- ZIP files are validated as ZIP archives.
-- UN XML files are validated as XML.
-- README documents build, run, output, access workflow, and implementation
-  decisions.
-
-Why:
-
-- Rosfinmonitoring production access workflow requires request/response
-  envelopes for test methods.
-- Binary responses should stay as files, not be embedded into JSON.
-- A successful HTTP response is not enough; the downloaded registry file must be
-  structurally valid.
-- Future maintainers need to understand why these pieces exist.
+This allows schedulers and monitoring tools to distinguish failed runs from successful runs with no updates.
 
 ## Troubleshooting
 
-### TLS `protocol_version`
-
-Check that the base URL contains port `8081`:
-
-```text
-https://portal.fedsfm.ru:8081/Services/fedsfm-service
-```
-
-### TLS `handshake_failure` or `Connection reset`
+### TLS Errors
 
 Check:
 
-- certificate has a private key
-- certificate serial is correct
-- CryptoPro providers are loaded
-- `SslProtocol`: try `GostTLSv1.2` or `GostTLS`
-- key manager settings: try `GostX509/JTLS` or default provider
-- trust manager and trust store settings
+- API URL contains port `8081`;
+- CryptoPro providers are installed;
+- certificate serial is correct;
+- certificate has a private key;
+- certificate is the one bound to the Rosfinmonitoring account;
+- `SslProtocol` and `SslProvider` match the working environment.
 
-### Mojibake in console
+### No Production Access
 
-Use UTF-8 console:
+If TLS succeeds but API returns authorization or access errors, complete the test method procedure and request production access through the Personal Account.
 
-```powershell
-chcp 65001
-```
+### Telegram Does Not Send
 
-### No production access
+Check:
 
-If TLS succeeds but API returns authorization/access errors, complete the test
-method workflow and submit a production access request through the Personal
-Account support form.
+- bot token;
+- chat id;
+- network access to `api.telegram.org`;
+- that the user or group has started/allowed the bot.
+
+### Email Does Not Send
+
+Check:
+
+- SMTP host and port;
+- whether authentication is required;
+- TLS setting;
+- sender address permissions;
+- firewall rules from the execution machine to the SMTP server.
+
