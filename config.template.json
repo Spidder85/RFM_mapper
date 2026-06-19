@@ -1,17 +1,10 @@
-//{
-//  "Credentials": {
-//    "UserName": "YOUR_RFM_USERNAME",
-//    "Password": "YOUR_RFM_PASSWORD"
-//  },
-//  "Certificate": {
-//    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
 {
   "Credentials": {
-    "UserName": "1660055801165501001",
-    "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
+    "UserName": "YOUR_RFM_USERNAME",
+    "Password": "YOUR_RFM_PASSWORD"
   },
   "Certificate": {
-    "SerialNumber": "40601D0005296A417B49C00C680A0452",
+    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
     "StoreLocation": "CurrentUser",
     "StoreName": "My",
     "CertFilePath": null,
