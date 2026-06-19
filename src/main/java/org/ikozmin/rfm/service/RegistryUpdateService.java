@@ -15,6 +15,7 @@ import org.ikozmin.rfm.storage.RegistryState;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.ikozmin.rfm.logging.Masking;
 import org.ikozmin.rfm.storage.Sha256;
+import org.ikozmin.rfm.service.NotificationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,13 +29,13 @@ public final class RegistryUpdateService {
     private final DownloadRequestIdResolver downloadRequestIdResolver;
     private final RegistryFileValidator registryFileValidator;
 
-    private final EmailNotificationService notificationService;
+    private final NotificationService notificationService;
 
     public RegistryUpdateService(
         RfmClient apiClient,
         RegistryStateStore stateStore,
         Path outputDir,
-        EmailNotificationService notificationService
+        NotificationService notificationService
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
@@ -86,7 +87,7 @@ public final class RegistryUpdateService {
 
         stateStore.save(catalogType, newState);
 
-        // отправка уведомленияоб обновлениин на почту
+        // отправка уведомления об обновлении
         if (notificationService != null && notificationService.isEnabled()) {
             String oldIdXml = currentState == null ? null : currentState.getIdXml();
             notificationService.sendUpdateNotification(

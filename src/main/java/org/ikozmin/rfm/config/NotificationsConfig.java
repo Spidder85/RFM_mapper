@@ -7,13 +7,13 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class NotificationsConfig {
-    @JsonProperty("enabled")
+    @JsonProperty("Enabled")
     private boolean enabled;
 
-    @JsonProperty("email")
+    @JsonProperty("Email")
     private EmailConfig email;
 
-    @JsonProperty("telegram")
+    @JsonProperty("Telegram")
     private TelegramConfig telegram;
 
     public boolean isEnabled() {

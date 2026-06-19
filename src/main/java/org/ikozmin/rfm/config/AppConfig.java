@@ -20,8 +20,8 @@ public final class AppConfig {
     @JsonProperty("UseTestContour")
     private boolean useTestContour;
 
-    @JsonProperty("Notification")
-    private NotificationsConfig notification;
+    @JsonProperty("Notifications")
+    private NotificationsConfig notifications;
 
     public Credentials getCredentials() {
         return credentials;
@@ -43,8 +43,8 @@ public final class AppConfig {
         return useTestContour;
     }
 
-    public NotificationsConfig getNotification() {
-        return notification;
+    public NotificationsConfig getNotifications() {
+        return notifications;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

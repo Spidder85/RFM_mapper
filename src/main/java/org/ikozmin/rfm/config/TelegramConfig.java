@@ -7,31 +7,23 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class TelegramConfig {
-    @JsonProperty("enabled")
+    @JsonProperty("Enabled")
     private boolean enabled;
 
-    @JsonProperty("token")
+    @JsonProperty("Token")
     private String token;
 
-    @JsonProperty("chatIds")
+    @JsonProperty("ChatIds")
     private List<String> chatIds;
 
-    @JsonProperty("include_file_checksum")
+    @JsonProperty("IncludeFileChecksum")
     private boolean includeFileChecksum;
 
-    public boolean isEnabled() {
-        return enabled;
-    }
+    public boolean isEnabled() { return enabled; }
 
-    public String getToken() {
-        return token;
-    }
+    public String getToken() { return token; }
 
-    public List<String> getChatIds() {
-        return chatIds;
-    }
+    public List<String> getChatIds() { return chatIds; }
 
-    public boolean isIncludeFileChecksum() {
-        return includeFileChecksum;
-    }
+    public boolean isIncludeFileChecksum() { return includeFileChecksum; }
 }

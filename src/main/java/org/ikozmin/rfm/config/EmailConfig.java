@@ -7,80 +7,58 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class EmailConfig {
-    @JsonProperty("enabled")
+    @JsonProperty("Enabled")
     private boolean enabled;
 
-    @JsonProperty("smtp_host")
+    @JsonProperty("SmtpHost")
     private String smtpHost;
 
-    @JsonProperty("smtp_port")
-    private int smtpPort;
+    @JsonProperty("SmtpPort")
+    private Integer smtpPort;
 
-    @JsonProperty("smtp_username")
+    @JsonProperty("SmtpUsername")
     private String smtpUsername;
 
-    @JsonProperty("smtp_password")
+    @JsonProperty("SmtpPassword")
     private String smtpPassword;
 
-    @JsonProperty("use_tls")
+    @JsonProperty("UseTls")
     private boolean useTls;
 
-    @JsonProperty("from")
+    @JsonProperty("From")
     private String from;
 
-    @JsonProperty("to")
+    @JsonProperty("To")
     private List<String> to;
 
-    @JsonProperty("subject")
+    @JsonProperty("Subject")
     private String subject;
 
-    @JsonProperty("include_attachments")
-    private boolean includeAttachments;
+    @JsonProperty("IncludeAttachment")
+    private boolean includeAttachment;
 
-    @JsonProperty("include_file_checksum")
+    @JsonProperty("IncludeFileChecksum")
     private boolean includeFileChecksum;
 
-    public boolean isEnabled() {
-        return enabled;
-    }
+    public boolean isEnabled() { return enabled; }
 
-    public String getSmtpHost() {
-        return smtpHost;
-    }
+    public String getSmtpHost() { return smtpHost; }
 
-    public int getSmtpPort() {
-        return smtpPort;
-    }
+    public int getSmtpPort() { return smtpPort == null ? 25 : smtpPort; }
 
-    public String getSmtpUsername() {
-        return smtpUsername;
-    }
+    public String getSmtpUsername() { return smtpUsername; }
 
-    public String getSmtpPassword() {
-        return smtpPassword;
-    }
+    public String getSmtpPassword() { return smtpPassword; }
 
-    public boolean isUseTls() {
-        return useTls;
-    }
+    public boolean isUseTls() { return useTls; }
 
-    public String getFrom() {
-        return from;
-    }
+    public String getFrom() { return from; }
 
-    public List<String> getTo() {
-        return to;
-    }
+    public List<String> getTo() { return to; }
 
-    public String getSubject() {
-        return subject;
-    }
+    public String getSubject() { return subject; }
 
-    public boolean isIncludeAttachments() {
-        return includeAttachments;
-    }
+    public boolean isIncludeAttachment() { return includeAttachment; }
 
-    public boolean isIncludeFileChecksum() {
-        return includeFileChecksum;
-    }
+    public boolean isIncludeFileChecksum() { return includeFileChecksum; }
 }
