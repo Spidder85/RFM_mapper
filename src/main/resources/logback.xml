@@ -27,7 +27,7 @@
     </appender>
 
     <logger name="jdk.internal.httpclient.debug" level="OFF"/>
-    <logger name="ru.fedsfm.rfm" level="INFO"/>
+    <logger name="org.ikozmin.rfm" level="INFO"/>
 
     <root level="INFO">
         <appender-ref ref="CONSOLE"/>

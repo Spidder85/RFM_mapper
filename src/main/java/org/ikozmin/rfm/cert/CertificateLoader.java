@@ -29,7 +29,7 @@ public final class CertificateLoader {
                 allAliases.nextElement();
                 totalCount++;
             }
-            log.info("Total certificates in Windows-MY-CURRENTUSER store: {}", totalCount);
+            log.debug("Total certificates in Windows-MY-CURRENTUSER store: {}", totalCount);
             // ========================================
             String alias = findAliasBySerial(keyStore, serialNumber);
 
@@ -48,11 +48,10 @@ public final class CertificateLoader {
             String alias = aliases.nextElement();
             Certificate certificate = keyStore.getCertificate(alias);
 
-            if (!(certificate instanceof X509Certificate)) {
+            if (!(certificate instanceof X509Certificate x509)) {
                 continue;
             }
 
-            X509Certificate x509 = (X509Certificate) certificate;
             String actual = normalizeSerial(x509.getSerialNumber().toString(16));
 
             if (actual.equals(expected)) {

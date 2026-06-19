@@ -1,5 +1,6 @@
 package org.ikozmin.rfm.storage;
 
+import java.nio.file.StandardCopyOption;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +35,8 @@ public final class RegistryStateStore {
                     idXml,
                     properties.getProperty(prefix + "date"),
                     properties.getProperty(prefix + "file"),
-                    properties.getProperty(prefix + "downloadedAt")
+                    properties.getProperty(prefix + "downloadedAt"),
+                    properties.getProperty(prefix + "sha256")
             );
 
             log.info("Local state loaded. catalog={}, idXml={}, file={}",
@@ -59,10 +61,20 @@ public final class RegistryStateStore {
             properties.setProperty(prefix + "date", nullToEmpty(state.getDate()));
             properties.setProperty(prefix + "file", nullToEmpty(state.getFile()));
             properties.setProperty(prefix + "downloadedAt", nullToEmpty(state.getDownloadedAt()));
+            properties.setProperty(prefix + "sha256", nullToEmpty(state.getSha256()));
 
-            try (var output = Files.newOutputStream(path)) {
+            Path tempPath = path.resolveSibling(path.getFileName().toString() + ".tmp");
+
+            try (var output = Files.newOutputStream(tempPath)) {
                 properties.store(output, "RFM registry state");
             }
+
+            Files.move(
+                    tempPath,
+                    path,
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+            );
 
             log.info("Local state saved. catalog={}, idXml={}, file={}",
                 catalogType.getCode(),

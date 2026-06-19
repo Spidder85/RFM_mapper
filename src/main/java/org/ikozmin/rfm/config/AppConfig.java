@@ -126,6 +126,24 @@ public final class AppConfig {
         @JsonProperty("SslProvider")
         private String sslProvider;
 
+        @JsonProperty("KeyManagerAlgorithm")
+        private String keyManagerAlgorithm;
+
+        @JsonProperty("KeyManagerProvider")
+        private String keyManagerProvider;
+
+        @JsonProperty("TrustManagerAlgorithm")
+        private String trustManagerAlgorithm;
+
+        @JsonProperty("TrustManagerProvider")
+        private String trustManagerProvider;
+
+        @JsonProperty("TrustStoreType")
+        private String trustStoreType;
+
+        @JsonProperty("TrustStoreProvider")
+        private String trustStoreProvider;
+
         public String[] getProviderClasses() {
             return providerClasses;
         }
@@ -144,6 +162,30 @@ public final class AppConfig {
 
         public String getSslProvider() {
             return sslProvider;
+        }
+
+        public String getKeyManagerAlgorithm() {
+            return keyManagerAlgorithm;
+        }
+
+        public String getKeyManagerProvider() {
+            return keyManagerProvider;
+        }
+
+        public String getTrustManagerAlgorithm() {
+            return trustManagerAlgorithm;
+        }
+
+        public String getTrustManagerProvider() {
+            return trustManagerProvider;
+        }
+
+        public String getTrustStoreType() {
+            return trustStoreType;
+        }
+
+        public String getTrustStoreProvider() {
+            return trustStoreProvider;
         }
     }
 

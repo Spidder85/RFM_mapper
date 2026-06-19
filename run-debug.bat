@@ -3,7 +3,7 @@ setlocal
 
 set JAVA_HOME=C:\tmp\jdk-21.0.10
 set PATH=%JAVA_HOME%\bin;%PATH%
-set JAR_FILE=target\rfm-client-1.0.0.jar
+set JAR_FILE=target\rfm-client.jar
 
 if not exist "%JAR_FILE%" (
     echo ERROR: JAR file not found: %JAR_FILE%

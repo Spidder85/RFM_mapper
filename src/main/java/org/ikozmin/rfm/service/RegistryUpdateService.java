@@ -1,47 +1,59 @@
 package org.ikozmin.rfm.service;
 
-// Бизнес-логика проверки обновления и скачивания. API-клиент не знает про state и файлы, storage не знает про HTTP.
+import org.ikozmin.rfm.model.DownloadedFile;
+import java.nio.file.StandardCopyOption;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-import org.ikozmin.rfm.client.RfmApiClient;
+import org.ikozmin.rfm.client.RfmClient;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.storage.RegistryState;
 import org.ikozmin.rfm.storage.RegistryStateStore;
+import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.rfm.storage.Sha256;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class RegistryUpdateService {
     private static final Logger log = LoggerFactory.getLogger(RegistryUpdateService.class);
 
-    private final RfmApiClient apiClient;
+    private final RfmClient apiClient;
     private final RegistryStateStore stateStore;
     private final Path outputDir;
 
+    private final DownloadRequestIdResolver downloadRequestIdResolver;
+    private final RegistryFileValidator registryFileValidator;
+
     public RegistryUpdateService(
-        RfmApiClient apiClient,
+        RfmClient apiClient,
         RegistryStateStore stateStore,
         Path outputDir
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
         this.outputDir = outputDir;
+        this.downloadRequestIdResolver = new DownloadRequestIdResolver();
+        this.registryFileValidator = new RegistryFileValidator();
     }
 
     public UpdateResult update(CatalogType catalogType) {
-        log.info("Проверка обновлений реестра. catalog={}", catalogType.getCode());
+        log.info("Checking registry update. catalog={}", catalogType.getCode());
 
         CatalogInfo remoteCatalog = apiClient.getCatalog(catalogType);
         String remoteIdXml = remoteCatalog.requireIdXml();
+        String downloadRequestId = downloadRequestIdResolver.resolve(catalogType, remoteCatalog);
 
         RegistryState currentState = stateStore.load(catalogType);
 
         if (currentState != null && remoteIdXml.equalsIgnoreCase(currentState.getIdXml())) {
-            log.info("Реестр актуален. catalog={}, idXml={}", catalogType.getCode(), remoteIdXml);
+            log.info("Registry is actual. catalog={}, idXml={}",
+                    catalogType.getCode(),
+                    Masking.id(remoteIdXml)
+            );
 
             Path currentFile = currentState.getFile() == null || currentState.getFile().trim().isEmpty()
                 ? null
@@ -50,42 +62,68 @@ public final class RegistryUpdateService {
             return new UpdateResult(false, remoteIdXml, currentFile);
         }
 
-        log.info("Обнаружено обновление реестра. catalog={}, oldIdXml={}, newIdXml={}",
+        log.info("Registry update detected. catalog={}, oldIdXml={}, newIdXml={}",
             catalogType.getCode(),
-            currentState == null ? "<none>" : currentState.getIdXml(),
-            remoteIdXml
+            currentState == null ? "<none>" : Masking.id(currentState.getIdXml()),
+            Masking.id(remoteIdXml)
         );
 
-        byte[] fileBytes = apiClient.downloadFile(catalogType, remoteIdXml);
-        Path savedFile = saveFile(catalogType, remoteCatalog, fileBytes);
+        Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, downloadRequestId);
+        registryFileValidator.validate(catalogType, savedFile);
+        String sha256 = Sha256.ofFile(savedFile);
 
         RegistryState newState = new RegistryState(
             remoteIdXml,
             remoteCatalog.effectiveDate(),
             savedFile.toAbsolutePath().toString(),
-            LocalDateTime.now().toString()
+            LocalDateTime.now().toString(),
+            sha256
         );
 
         stateStore.save(catalogType, newState);
 
-        log.info("Обновление реестра завершено. catalog={}, file={}", catalogType.getCode(), savedFile.toAbsolutePath());
+        log.info("Registry file checksum calculated. catalog={}, sha256={}",
+                catalogType.getCode(),
+                sha256);
+        log.info("Registry update completed. catalog={}, file={}",
+                catalogType.getCode(),
+                savedFile.toAbsolutePath()
+        );
 
         return new UpdateResult(true, remoteIdXml, savedFile);
     }
 
-    private Path saveFile(CatalogType catalogType, CatalogInfo catalogInfo, byte[] fileBytes) {
+    private Path downloadAndMoveAtomically(
+            CatalogType catalogType,
+            CatalogInfo catalogInfo,
+            String downloadRequestId
+    ) {
         try {
             Path catalogDir = outputDir.resolve(catalogType.getCode());
             Files.createDirectories(catalogDir);
 
-            Path target = catalogDir.resolve(buildFileName(catalogType, catalogInfo));
-            Files.write(target, fileBytes);
+            Path finalFile = catalogDir.resolve(buildFileName(catalogType, catalogInfo));
+            Path tempFile = catalogDir.resolve(finalFile.getFileName().toString() + ".part");
 
-            log.info("Файл реестра сохранен. path={}, bytes={}", target.toAbsolutePath(), fileBytes.length);
+            Files.deleteIfExists(tempFile);
 
-            return target;
+            DownloadedFile downloadedFile = apiClient.downloadFile(catalogType, downloadRequestId, tempFile);
+
+            Files.move(
+                    downloadedFile.getPath(),
+                    finalFile,
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE
+            );
+
+            log.info("Registry file saved atomically. path={}, bytes={}, contentType={}",
+                    finalFile.toAbsolutePath(),
+                    downloadedFile.getSize(),
+                    downloadedFile.getContentType());
+
+            return finalFile;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to save registry file", e);
+            throw new IllegalStateException("Failed to download and save registry file", e);
         }
     }
 
