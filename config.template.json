@@ -31,5 +31,33 @@
     "LogLevel": "INFO"
   },
   "DefaultCatalog": "te21",
-  "UseTestContour": false
+  "UseTestContour": false,
+  "Notifications": {
+    "Enabled": true,
+    "Email": {
+      "Enabled": true,
+      "SmtpHost": "smtp.your-company.ru",
+      "SmtpPort": 25,
+      "SmtpUsername": "",
+      "SmtpPassword": "",
+      "UseTls": false,
+      "From": "noreply@your-company.ru",
+      "To": [
+        "admin1@your-company.ru",
+        "admin2@your-company.ru"
+      ],
+      "Subject": "RFM Client Notification",
+      "IncludeAttachment": false,
+      "IncludeFileChecksum": true
+    },
+    "Telegram": {
+      "Enabled": false,
+      "Token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "ChatId": [
+        "YOUR_TELEGRAM_CHAT_ID1",
+        "YOUR_TELEGRAM_CHAT_ID2"
+      ],
+      "IncludeFileChecksum": true
+    }
+  }
 }

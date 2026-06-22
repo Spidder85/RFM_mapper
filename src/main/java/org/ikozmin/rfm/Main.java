@@ -12,6 +12,7 @@ import org.ikozmin.rfm.client.RfmEndpoints;
 import org.ikozmin.rfm.client.RfmHttpClientFactory;
 import org.ikozmin.rfm.config.AppConfig;
 import org.ikozmin.rfm.config.ConfigLoader;
+import org.ikozmin.rfm.service.NotificationService;
 import org.ikozmin.rfm.logging.Masking;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.service.RegistryUpdateService;
@@ -58,7 +59,7 @@ public final class Main {
             ? CatalogType.from(cli.catalog)
             : CatalogType.from(configLoader.defaultCatalog(config));
 
-        log.info("Application starte");
+        log.info("Application start");
         log.info("Config path: {}", configPath.toAbsolutePath());
         log.info("Output directory: {}", outputDir.toAbsolutePath());
         log.info("Contour: {}", contour);
@@ -94,10 +95,13 @@ public final class Main {
             configLoader.password(config)
         ));
 
+        NotificationService notificationService = new NotificationService(config.getNotifications());
+
         RegistryUpdateService updateService = new RegistryUpdateService(
             apiClient,
             new RegistryStateStore(outputDir.resolve("state.properties")),
-            outputDir
+            outputDir,
+            notificationService
         );
 
         UpdateResult result = retryPolicy.execute(
@@ -151,6 +155,7 @@ public final class Main {
                         break;
                     case "--contour":
                         cli.contour = Contour.fromCliValue(requireValue(args, ++i, arg));
+                        break;
                     case "-h":
                     case "--help":
                         printHelpAndExit();
