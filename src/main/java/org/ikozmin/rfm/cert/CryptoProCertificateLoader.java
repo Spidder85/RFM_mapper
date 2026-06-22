@@ -26,11 +26,14 @@ public final class CryptoProCertificateLoader {
 
             String keyStoreType = valueOrDefault(
                 cryptoPro == null ? null : cryptoPro.getKeyStoreType(),
-                "Windows-MY"
+                "REGISTRY"
             );
 
             String keyStoreProvider = trimToNull(
-                cryptoPro == null ? null : cryptoPro.getKeyStoreProvider()
+                valueOrDefault(
+                    cryptoPro == null ? null : cryptoPro.getKeyStoreProvider(),
+                    "JCSP"
+                )
             );
 
             log.info("Loading CryptoPro certificate. keyStoreType={}, keyStoreProvider={}, serial={}",
