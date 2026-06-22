@@ -32,6 +32,7 @@
   },
   "DefaultCatalog": "te21",
   "UseTestContour": false,
+  "OutputDirectory": "downloads",
   "Notifications": {
     "Enabled": true,
     "Email": {
