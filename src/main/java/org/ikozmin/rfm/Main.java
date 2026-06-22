@@ -40,8 +40,8 @@ public final class Main implements Callable<Integer> {
     @Option(names = {"-c", "--config"}, description = "Path to config.json")
     private Path configPath = Path.of("..", "config.json");
 
-    @Option(names = {"-o", "--out"}, description = "Output directory")
-    private Path outputDir = Path.of("downloads");
+//    @Option(names = {"-o", "--out"}, description = "Output directory")
+//    private Path outputDir = Path.of("downloads");
 
     @Option(names = {"-k", "--catalog"}, description = "Catalog: te2, te21, mvk, un, un-rus")
     private String catalog;
@@ -74,10 +74,22 @@ public final class Main implements Callable<Integer> {
     }
 
     private void run() throws Exception {
-        Files.createDirectories(outputDir);
-
         ConfigLoader configLoader = new ConfigLoader();
         AppConfig config = configLoader.load(configPath);
+
+        // ===== ПАПКИ =====
+        // Локальная папка — всегда downloads (для audit и state)
+        Path outputDir = Path.of("downloads");
+        Files.createDirectories(outputDir);
+
+        // Папка из конфига для скачанных файлов
+        String downloadDirValue = config.getOutputDirectory();
+        if (downloadDirValue == null || downloadDirValue.trim().isEmpty()) {
+            downloadDirValue = "downloads";
+            log.warn("OutputDirectory not configured in config.json, using default: {}", downloadDirValue);
+        }
+        Path downloadDir = Path.of(downloadDirValue);
+        Files.createDirectories(downloadDir);
 
         Contour contour = resolveContour(config);
         CatalogType catalogType = catalog != null
@@ -123,7 +135,8 @@ public final class Main implements Callable<Integer> {
         RegistryUpdateService updateService = new RegistryUpdateService(
             apiClient,
             new RegistryStateStore(outputDir.resolve("state.properties")),
-            outputDir
+            outputDir,      // для audit и state
+            downloadDir    // для скачанных файлов
         );
 
         UpdateResult result = retryPolicy.execute(

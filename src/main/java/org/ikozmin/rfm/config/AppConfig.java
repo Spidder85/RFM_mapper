@@ -23,6 +23,9 @@ public final class AppConfig {
     @JsonProperty("Notifications")
     private NotificationsConfig notifications;
 
+    @JsonProperty("OutputDirectory")
+    private String outputDirectory;
+
     public Credentials getCredentials() {
         return credentials;
     }
@@ -45,6 +48,10 @@ public final class AppConfig {
 
     public NotificationsConfig getNotifications() {
         return notifications;
+    }
+
+    public String getOutputDirectory() {
+        return outputDirectory;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -194,6 +201,8 @@ public final class AppConfig {
         public String getTrustStoreProvider() {
             return trustStoreProvider;
         }
+
+
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

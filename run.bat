@@ -30,8 +30,7 @@ echo.
     org.ikozmin.rfm.Main ^
     --config config.json ^
     --prod ^
-    --catalog te21 ^
-    --out downloads
+    --catalog te21
 
 echo.
 echo === Exit code: %ERRORLEVEL% ===
