@@ -1,18 +1,19 @@
 package org.ikozmin.rfm.service;
 
+import org.ikozmin.rfm.model.CatalogType;
+
 import java.nio.file.Path;
 
-public final class UpdateResult {
-    private final boolean downloaded;
-    private final String idXml;
-    private final Path file;
-
-    public UpdateResult(boolean downloaded, String idXml, Path file) {
-        this.downloaded = downloaded;
-        this.idXml = idXml;
-        this.file = file;
-    }
-
+public record UpdateResult(
+        boolean downloaded,
+        CatalogType catalogType,
+        String oldIdXml,
+        String idXml,
+        Path file,
+        String sha256,
+        long fileSize,
+        String downloadedAt
+) {
     public boolean isDownloaded() {
         return downloaded;
     }

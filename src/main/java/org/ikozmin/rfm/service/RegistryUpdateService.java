@@ -29,20 +29,16 @@ public final class RegistryUpdateService {
     private final DownloadRequestIdResolver downloadRequestIdResolver;
     private final RegistryFileValidator registryFileValidator;
 
-    private final NotificationService notificationService;
-
     public RegistryUpdateService(
         RfmClient apiClient,
         RegistryStateStore stateStore,
-        Path outputDir,
-        NotificationService notificationService
+        Path outputDir
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
         this.outputDir = outputDir;
         this.downloadRequestIdResolver = new DownloadRequestIdResolver();
         this.registryFileValidator = new RegistryFileValidator();
-        this.notificationService = notificationService;
     }
 
     public UpdateResult update(CatalogType catalogType) {
@@ -64,7 +60,16 @@ public final class RegistryUpdateService {
                 ? null
                 : Path.of(currentState.getFile());
 
-            return new UpdateResult(false, remoteIdXml, currentFile);
+            return new UpdateResult(
+                    false,
+                    catalogType,
+                    currentState.getIdXml(),
+                    remoteIdXml,
+                    currentFile,
+                    currentState.getSha256(),
+                    safeFileSize(currentFile),
+                    currentState.getDownloadedAt()
+            );
         }
 
         log.info("Registry update detected. catalog={}, oldIdXml={}, newIdXml={}",
@@ -77,28 +82,19 @@ public final class RegistryUpdateService {
         registryFileValidator.validate(catalogType, savedFile);
         String sha256 = Sha256.ofFile(savedFile);
 
+        String oldIdXml = currentState == null ? null : currentState.getIdXml();
+        String downloadedAt = LocalDateTime.now().toString();
+        long fileSize = safeFileSize(savedFile);
+
         RegistryState newState = new RegistryState(
-            remoteIdXml,
-            remoteCatalog.effectiveDate(),
-            savedFile.toAbsolutePath().toString(),
-            LocalDateTime.now().toString(),
-            sha256
+                remoteIdXml,
+                remoteCatalog.effectiveDate(),
+                savedFile.toAbsolutePath().toString(),
+                downloadedAt,
+                sha256
         );
 
         stateStore.save(catalogType, newState);
-
-        // отправка уведомления об обновлении
-        if (notificationService != null && notificationService.isEnabled()) {
-            String oldIdXml = currentState == null ? null : currentState.getIdXml();
-            notificationService.sendUpdateNotification(
-                    catalogType.getCode(),
-                    remoteIdXml,
-                    savedFile,
-                    sha256,
-                    oldIdXml
-
-            );
-        }
 
         log.info("Registry file checksum calculated. catalog={}, sha256={}",
                 catalogType.getCode(),
@@ -108,7 +104,16 @@ public final class RegistryUpdateService {
                 savedFile.toAbsolutePath()
         );
 
-        return new UpdateResult(true, remoteIdXml, savedFile);
+        return new UpdateResult(
+                true,
+                catalogType,
+                oldIdXml,
+                remoteIdXml,
+                savedFile,
+                sha256,
+                fileSize,
+                downloadedAt
+        );
     }
 
     private Path downloadAndMoveAtomically(
@@ -163,5 +168,18 @@ public final class RegistryUpdateService {
             + shortId
             + "."
             + catalogType.getExtension();
+    }
+
+    private long safeFileSize(Path file) {
+        if (file == null || !Files.exists(file)) {
+            return 0L;
+        }
+
+        try {
+            return Files.size(file);
+        } catch (Exception e) {
+            log.warn("Failed to get file size. file={}, error={}", file, e.getMessage());
+            return 0L;
+        }
     }
 }
