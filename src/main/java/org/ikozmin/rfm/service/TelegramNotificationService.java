@@ -5,14 +5,18 @@ import org.ikozmin.rfm.logging.Masking;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
-import java.net.URLEncoder;
+import javax.net.ssl.*;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.*;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyStore;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
@@ -21,12 +25,46 @@ public final class TelegramNotificationService {
 
     private final TelegramConfig config;
     private final HttpClient httpClient;
+    //private final TrustManager[] trustAllCerts;
 
     public TelegramNotificationService(TelegramConfig config) {
         this.config = config;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15))
-                .build();
+//        this.trustAllCerts = new TrustManager[]{
+//                new X509TrustManager() {
+//                    public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+//                    public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+//                    public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+//                }
+//        };
+        this.httpClient = createHttpClient();
+    }
+
+    private HttpClient createHttpClient() {
+        try {
+            // Создаём TrustManager, который доверяет всем сертификатам
+
+            TrustManager[] trustAllCerts = new TrustManager[] {
+                    new X509TrustManager() {
+                        public java.security.cert.X509Certificate[] getAcceptedIssuers() { return null; }
+                        public void checkClientTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+                        public void checkServerTrusted(java.security.cert.X509Certificate[] certs, String authType) { }
+                    }
+            };
+
+            SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
+
+            log.info("Telegram HttpClient created with Windows-ROOT truststore");
+            return HttpClient.newBuilder()
+                    .sslContext(sslContext)
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .build();
+        } catch (Exception e) {
+            log.warn("Failed to create SSL context with Windows-ROOT, using default: {}", e.getMessage());
+            return HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(15))
+                    .build();
+        }
     }
 
     public boolean isEnabled() {
@@ -59,29 +97,70 @@ public final class TelegramNotificationService {
         }
     }
 
+//    private void sendMessage(String chatId, String text) throws Exception {
+//        String apiUrl = "https://149.154.167.220:443/bot";
+//        String url = apiUrl + config.getToken() + "/sendMessage";
+//
+//        String body = "chat_id=" + encode(chatId)
+//                + "&text=" + encode(text)
+//                + "&disable_web_page_preview=true";
+//
+//        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+//                .timeout(Duration.ofSeconds(30))
+//                .header("Content-Type", "application/x-www-form-urlencoded")
+//                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+//                .build();
+//
+//        HttpResponse<String> response = httpClient.send(
+//                request,
+//                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+//        );
+//
+//        if (response.statusCode() < 200 || response.statusCode() >= 300 || !response.body().contains("\"ok\":true")) {
+//            throw new IllegalStateException("Telegram API error. status=" + response.statusCode() + ", body=" + response.body());
+//        }
+//
+//        log.info("Telegram message delivered. chatId={}, token={}", chatId, Masking.token(config.getToken()));
+//    }
+
     private void sendMessage(String chatId, String text) throws Exception {
-        String url = "https://api.telegram.org/bot" + config.getToken() + "/sendMessage";
+        String token = config.getToken();
+        String apiIp = config.getApiIp() != null ? config.getApiIp() : "149.154.167.220";
 
-        String body = "chat_id=" + encode(chatId)
-                + "&text=" + encode(text)
-                + "&disable_web_page_preview=true";
+        // экранируем текст для curl
+        String escapedText = text.replace("\"", "\\\"");
 
-        HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-                .timeout(Duration.ofSeconds(30))
-                .header("Content-Type", "application/x-www-form-urlencoded")
-                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                .build();
+        String[] command = {
+                "curl",
+                "--resolve", "api.telegram.org:443:" + apiIp,
+                "-X", "POST",
+                "https://api.telegram.org/bot" + token + "/sendMessage",
+                "-d", "chat_id=" + chatId + "&text=" + escapedText + "&disable_web_page_preview=true"
+        };
+        log.info("Executing: {}", String.join(" ", command));
 
-        HttpResponse<String> response = httpClient.send(
-                request,
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
-        );
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
 
-        if (response.statusCode() < 200 || response.statusCode() >= 300 || !response.body().contains("\"ok\":true")) {
-            throw new IllegalStateException("Telegram API error. status=" + response.statusCode() + ", body=" + response.body());
+        Process process = pb.start();
+
+        // Читаем вывод
+        StringBuilder output = new StringBuilder();
+        try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line);
+            }
         }
 
-        log.info("Telegram message delivered. chatId={}, token={}", chatId, Masking.token(config.getToken()));
+        int exitCode = process.waitFor();
+
+        if (exitCode != 0 || !output.toString().contains("\"ok\":true")) {
+            throw new IllegalStateException("curl failed. exitCode=" + exitCode + ", output=" + output);
+        }
+
+        log.info("Telegram message delivered. chatId={}, output={}", chatId, output);
     }
 
     private String buildMessage(String catalogType, String idXml, Path filePath, String checksum, String oldIdXml) throws Exception {

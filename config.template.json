@@ -38,8 +38,8 @@
       "Enabled": true,
       "SmtpHost": "smtp.your-company.ru",
       "SmtpPort": 25,
-      "SmtpUsername": "noreply@your-company.ru",
-      "SmtpPassword": "your-password",
+      "SmtpUsername": "",
+      "SmtpPassword": "",
       "UseTls": false,
       "From": "noreply@your-company.ru",
       "To": [
@@ -51,7 +51,7 @@
       "IncludeFileChecksum": true
     },
     "Telegram": {
-      "Enabled": true,
+      "Enabled": false,
       "Token": "YOUR_TELEGRAM_BOT_TOKEN",
       "ChatId": [
         "YOUR_TELEGRAM_CHAT_ID1",

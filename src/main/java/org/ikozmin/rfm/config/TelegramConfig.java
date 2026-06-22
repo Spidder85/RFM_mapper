@@ -19,6 +19,9 @@ public final class TelegramConfig {
     @JsonProperty("IncludeFileChecksum")
     private boolean includeFileChecksum;
 
+    @JsonProperty("ApiIp")
+    private String apiIp;
+
     public boolean isEnabled() { return enabled; }
 
     public String getToken() { return token; }
@@ -26,4 +29,8 @@ public final class TelegramConfig {
     public List<String> getChatIds() { return chatIds; }
 
     public boolean isIncludeFileChecksum() { return includeFileChecksum; }
+
+    public String getApiIp() {
+        return apiIp;
+    }
 }
