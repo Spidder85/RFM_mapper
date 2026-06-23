@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Properties;
 
@@ -40,7 +41,9 @@ public final class EmailNotificationService {
             String checksum,
             String oldIdXml
     ) {
-        if (!isEnabled()) return;
+        if (!isEnabled()) {
+            return;
+        }
 
         try {
             validate();
@@ -50,11 +53,8 @@ public final class EmailNotificationService {
 
             sendEmail(subject, body, config.getTo(), filePath);
 
-            log.info("Email notification sent. catalog={}, recipients={}",
-                    catalogType,
-                    config.getTo().size()
-            );
-        }  catch (Exception e) {
+            log.info("Email notification sent. catalog={}, recipients={}", catalogType, config.getTo().size());
+        } catch (Exception e) {
             log.error("Failed to send email notification: {}", e.getMessage(), e);
         }
     }
@@ -112,11 +112,13 @@ public final class EmailNotificationService {
     }
 
     private String buildSubject(String catalogType) {
+        String catalogName = displayCatalogName(catalogType);
+
         if (isBlank(config.getSubject())) {
-            return "Обновлен перечень Росфинмониторинга: " + catalogType;
+            return "Обновлен перечень Росфинмониторинга: " + catalogName;
         }
 
-        return config.getSubject() + " [" + catalogType + "]";
+        return config.getSubject() + ": " + catalogName;
     }
 
     private String buildBody(String catalogType, String idXml, Path filePath, String checksum, String oldIdXml) throws Exception {
@@ -127,13 +129,12 @@ public final class EmailNotificationService {
         body.append("В системе Росфинмониторинга опубликована новая версия перечня.").append(System.lineSeparator());
         body.append("Файл успешно загружен и сохранен.").append(System.lineSeparator());
         body.append(System.lineSeparator());
-
         body.append("Информация об обновлении").append(System.lineSeparator());
         body.append("Перечень: ").append(displayCatalogName(catalogType)).append(System.lineSeparator());
         body.append("Дата и время загрузки: ").append(formatDateTime(LocalDateTime.now())).append(System.lineSeparator());
 
         if (filePath != null) {
-            body.append("Имя файла: ").append(filePath.toAbsolutePath()).append(System.lineSeparator());
+            body.append("Имя файла: ").append(filePath.getFileName()).append(System.lineSeparator());
 
             if (Files.exists(filePath)) {
                 body.append("Размер файла: ").append(formatFileSize(Files.size(filePath))).append(System.lineSeparator());
@@ -188,7 +189,7 @@ public final class EmailNotificationService {
     }
 
     private String formatDateTime(LocalDateTime dateTime) {
-        return dateTime.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
+        return dateTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
     }
 
     private String formatFileSize(long size) {

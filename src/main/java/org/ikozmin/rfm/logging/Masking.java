@@ -38,7 +38,7 @@ public final class Masking {
 
     public static String userName(String value) {
         if (isBlank(value)) {
-            return "<empty";
+            return "<empty>";
         }
 
         return middleMask(value, 4, 3);

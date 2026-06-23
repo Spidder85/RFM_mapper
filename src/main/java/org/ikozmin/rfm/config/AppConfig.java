@@ -26,6 +26,9 @@ public final class AppConfig {
     @JsonProperty("OutputDirectory")
     private String outputDirectory;
 
+    @JsonProperty("Retention")
+    private RetentionConfig retention;
+
     public Credentials getCredentials() {
         return credentials;
     }
@@ -52,6 +55,10 @@ public final class AppConfig {
 
     public String getOutputDirectory() {
         return outputDirectory;
+    }
+
+    public RetentionConfig getRetention() {
+        return retention;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -15,6 +15,7 @@ import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.Contour;
 import org.ikozmin.rfm.service.NotificationService;
 import org.ikozmin.rfm.service.RegistryUpdateService;
+import org.ikozmin.rfm.service.RetentionService;
 import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.slf4j.Logger;
@@ -39,9 +40,6 @@ public final class Main implements Callable<Integer> {
 
     @Option(names = {"-c", "--config"}, description = "Path to config.json")
     private Path configPath = Path.of("..", "config.json");
-
-//    @Option(names = {"-o", "--out"}, description = "Output directory")
-//    private Path outputDir = Path.of("downloads");
 
     @Option(names = {"-k", "--catalog"}, description = "Catalog: te2, te21, mvk, un, un-rus")
     private String catalog;
@@ -77,18 +75,10 @@ public final class Main implements Callable<Integer> {
         ConfigLoader configLoader = new ConfigLoader();
         AppConfig config = configLoader.load(configPath);
 
-        // ===== ПАПКИ =====
-        // Локальная папка — всегда downloads (для audit и state)
-        Path outputDir = Path.of("downloads");
-        Files.createDirectories(outputDir);
+        Path workDir = Path.of("downloads");
+        Files.createDirectories(workDir);
 
-        // Папка из конфига для скачанных файлов
-        String downloadDirValue = config.getOutputDirectory();
-        if (downloadDirValue == null || downloadDirValue.trim().isEmpty()) {
-            downloadDirValue = "downloads";
-            log.warn("OutputDirectory not configured in config.json, using default: {}", downloadDirValue);
-        }
-        Path downloadDir = Path.of(downloadDirValue);
+        Path downloadDir = resolveDownloadDir(config);
         Files.createDirectories(downloadDir);
 
         Contour contour = resolveContour(config);
@@ -98,7 +88,8 @@ public final class Main implements Callable<Integer> {
 
         log.info("Application start");
         log.info("Config path: {}", configPath.toAbsolutePath());
-        log.info("Output directory: {}", outputDir.toAbsolutePath());
+        log.info("Work directory: {}", workDir.toAbsolutePath());
+        log.info("Download directory: {}", downloadDir.toAbsolutePath());
         log.info("Contour: {}", contour);
         log.info("Catalog: {}", catalogType.getCode());
         log.info("Certificate serial: {}", Masking.serial(configLoader.certificateSerial(config)));
@@ -116,7 +107,7 @@ public final class Main implements Callable<Integer> {
         RfmHttpClientFactory factory = new RfmHttpClientFactory();
         HttpClient httpClient = factory.create(certificate, config.getCertificate());
 
-        AuditWriter auditWriter = new AuditWriter(outputDir.resolve("audit"));
+        AuditWriter auditWriter = new AuditWriter(workDir.resolve("audit"));
 
         RfmApiClient apiClient = new RfmApiClient(
                 httpClient,
@@ -134,9 +125,9 @@ public final class Main implements Callable<Integer> {
 
         RegistryUpdateService updateService = new RegistryUpdateService(
             apiClient,
-            new RegistryStateStore(outputDir.resolve("state.properties")),
-            outputDir,      // для audit и state
-            downloadDir    // для скачанных файлов
+            new RegistryStateStore(workDir.resolve("state.properties")),
+            workDir,
+            downloadDir
         );
 
         UpdateResult result = retryPolicy.execute(
@@ -168,6 +159,19 @@ public final class Main implements Callable<Integer> {
                 System.out.println("CURRENT_FILE " + result.file().toAbsolutePath());
             }
         }
+
+        applyRetentionIfNeeded(config, workDir, downloadDir, catalogType);
+    }
+
+    private Path resolveDownloadDir(AppConfig config) {
+        String value = config.getOutputDirectory();
+
+        if (value == null || value.trim().isEmpty()) {
+            log.warn("OutputDirectory is not configured, using default: downloads");
+            return Path.of("downloads");
+        }
+
+        return Path.of(value.trim());
     }
 
     private void sendNotificationIfNeeded(AppConfig config, UpdateResult result) {
@@ -184,6 +188,16 @@ public final class Main implements Callable<Integer> {
                 result.sha256(),
                 result.oldIdXml()
         );
+    }
+
+    private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, CatalogType catalogType) {
+        RetentionService retentionService = new RetentionService(config.getRetention());
+
+        if (!retentionService.isEnabled()) {
+            return;
+        }
+
+        retentionService.apply(workDir, downloadDir, catalogType);
     }
 
     private Contour resolveContour(AppConfig config) {

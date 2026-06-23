@@ -55,11 +55,14 @@ public final class RfmHttpClientFactory {
         try {
             String sslProtocol = valueOrDefault(
                     cryptoPro == null ? null : cryptoPro.getSslProtocol(),
-                    "GostTLS"
+                    "GostTLSv1.2"
             );
 
             String sslProvider = trimToNull(
-                    cryptoPro == null ? null : cryptoPro.getSslProvider()
+                    valueOrDefault(
+                            cryptoPro == null ? null : cryptoPro.getSslProvider(),
+                            "JTLS"
+                    )
             );
 
             log.info("Creating CryptoPro TLS HTTP client. protocol={}, provider={}",
@@ -160,11 +163,14 @@ public final class RfmHttpClientFactory {
     private KeyManagerFactory createKeyManagerFactory(AppConfig.CryptoPro cryptoPro) throws Exception {
         String algorithm = valueOrDefault(
                 cryptoPro == null ? null : cryptoPro.getKeyManagerAlgorithm(),
-                KeyManagerFactory.getDefaultAlgorithm()
+                "GostX509"
         );
 
         String provider = trimToNull(
-                cryptoPro == null ? null : cryptoPro.getKeyManagerProvider()
+                valueOrDefault(
+                        cryptoPro == null ? null : cryptoPro.getKeyManagerProvider(),
+                        "JTLS"
+                )
         );
 
         log.info("Creating KeyManagerFactory. algorithm={}, provider={}",
@@ -179,7 +185,7 @@ public final class RfmHttpClientFactory {
     private TrustManagerFactory createTrustManagerFactory(AppConfig.CryptoPro cryptoPro) throws Exception {
         String algorithm = valueOrDefault(
                 cryptoPro == null ? null : cryptoPro.getTrustManagerAlgorithm(),
-                TrustManagerFactory.getDefaultAlgorithm()
+                "PKIX"
         );
 
         String provider = trimToNull(
@@ -197,7 +203,10 @@ public final class RfmHttpClientFactory {
 
     private KeyStore createTrustStore(AppConfig.CryptoPro cryptoPro) throws Exception {
         String trustStoreType = trimToNull(
-                cryptoPro == null ? null : cryptoPro.getTrustStoreType()
+                valueOrDefault(
+                        cryptoPro == null ? null : cryptoPro.getTrustStoreType(),
+                        "Windows-ROOT"
+                )
         );
 
         if (trustStoreType == null) {
@@ -205,7 +214,12 @@ public final class RfmHttpClientFactory {
             return null;
         }
 
-        String trustStoreProvider = trimToNull(cryptoPro.getTrustStoreProvider());
+        String trustStoreProvider = trimToNull(
+                valueOrDefault(
+                        cryptoPro == null ? null : cryptoPro.getTrustStoreProvider(),
+                        "SunMSCAPI"
+                )
+        );
 
         log.info("Opening trust store. type={}, provider={}",
                 trustStoreType,

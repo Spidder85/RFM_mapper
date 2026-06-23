@@ -8,8 +8,7 @@
     <version>2.0.0</version>
 
     <properties>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jackson.version>2.17.2</jackson.version>
         <slf4j.version>2.0.13</slf4j.version>
@@ -132,7 +131,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- JavaMail для отправки email -->
+        <!-- Jakarta Mail for email notifications -->
         <dependency>
             <groupId>com.sun.mail</groupId>
             <artifactId>jakarta.mail</artifactId>
@@ -149,7 +148,7 @@
     <build>
         <finalName>${project.artifactId}</finalName>
         <plugins>
-            <!-- Копирование зависимостей в папку libs -->
+            <!-- Copy runtime dependencies to target/libs -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -169,7 +168,7 @@
                 </executions>
             </plugin>
 
-            <!-- Сборка "тонкого" JAR с указанием classpath -->
+            <!-- Build a thin JAR with classpath in the manifest -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
@@ -185,7 +184,7 @@
                 </configuration>
             </plugin>
 
-            <!-- Сборка ZIP архива для распространения -->
+            <!-- Build a distribution ZIP archive -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>

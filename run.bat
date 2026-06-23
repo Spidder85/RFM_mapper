@@ -8,17 +8,15 @@ set JAR_FILE=rfm-client.jar
 
 if not exist "%JAR_FILE%" (
     echo ERROR: JAR file not found: %JAR_FILE%
-::    pause
     exit /b 1
 )
 
 if not exist "libs" (
     echo ERROR: libs folder not found
-::    pause
     exit /b 1
 )
 
-echo === Запуск RFM_mapper с CryptoPro JCP ===
+echo === Starting RFM Client ===
 echo.
 
 "%JAVA_HOME%\bin\java.exe" ^
@@ -35,5 +33,4 @@ echo.
 echo.
 echo === Exit code: %ERRORLEVEL% ===
 
-:: pause
 exit /b %ERRORLEVEL%

@@ -5,38 +5,20 @@
   },
   "Certificate": {
     "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
-    "StoreLocation": "CurrentUser",
-    "StoreName": "My",
-    "CertFilePath": null,
-    "CertPfxPath": null,
-    "CertPfxPassword": "",
-    "UseCryptoPro": true,
-    "CryptoPro": {
-      "ProviderClasses": [
-        "ru.CryptoPro.JCSP.JCSP",
-        "ru.CryptoPro.JCP.JCP",
-        "ru.CryptoPro.Crypto.CryptoProvider",
-        "ru.CryptoPro.ssl.Provider"
-      ],
-      "KeyStoreType": "REGISTRY",
-      "KeyStoreProvider": "JCSP",
-      "TrustStoreType": "WINDOWS-ROOT",
-      "TrustStoreProvider": "SunMSCAPI",
-      "SslProtocol": "GostTLSv1.2",
-      "SslProvider": "JTLS"
-    }
-  },
-  "Logging": {
-    "LogFileName": "rfm_client.log",
-    "LogLevel": "INFO"
+    "UseCryptoPro": true
   },
   "DefaultCatalog": "te21",
   "UseTestContour": false,
   "OutputDirectory": "downloads",
-  "Notifications": {
+  "Retention": {
     "Enabled": true,
+    "KeepAuditDays": 30,
+    "KeepDownloadedVersions": 10
+  },
+  "Notifications": {
+    "Enabled": false,
     "Email": {
-      "Enabled": true,
+      "Enabled": false,
       "SmtpHost": "smtp.your-company.ru",
       "SmtpPort": 25,
       "SmtpUsername": "",
@@ -44,20 +26,19 @@
       "UseTls": false,
       "From": "noreply@your-company.ru",
       "To": [
-        "admin1@your-company.ru",
-        "admin2@your-company.ru"
+        "admin@your-company.ru"
       ],
-      "Subject": "RFM Client Notification",
+      "Subject": "Обновлен перечень Росфинмониторинга",
       "IncludeAttachment": false,
       "IncludeFileChecksum": true
     },
     "Telegram": {
       "Enabled": false,
       "Token": "YOUR_TELEGRAM_BOT_TOKEN",
-      "ChatId": [
-        "YOUR_TELEGRAM_CHAT_ID1",
-        "YOUR_TELEGRAM_CHAT_ID2"
+      "ChatIds": [
+        "YOUR_TELEGRAM_CHAT_ID"
       ],
+      "ApiIp": "149.154.167.220",
       "IncludeFileChecksum": true
     }
   }
