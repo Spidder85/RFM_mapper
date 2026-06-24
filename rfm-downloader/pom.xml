@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.ikozmin</groupId>
+        <artifactId>rfm-automation-parent</artifactId>
+        <version>2.1.0</version>
+    </parent>
+
+    <artifactId>rfm-downloader</artifactId>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.ikozmin</groupId>
+            <artifactId>common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>${jackson.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>${logback.version}</version>
+        </dependency>
+
+        <!-- JCSP -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-jscp</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCSP.jar</systemPath>
+        </dependency>
+
+        <!-- JCP -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-jcp</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCP.jar</systemPath>
+        </dependency>
+
+        <!-- ASN1P -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-asn1p</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/ASN1P.jar</systemPath>
+        </dependency>
+
+        <!-- asn1rt -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-asn1rt</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/asn1rt.jar</systemPath>
+        </dependency>
+
+        <!-- JCPRevCheck -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-jcpRevCheck</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCPRevCheck.jar</systemPath>
+        </dependency>
+
+        <!-- cpSSL -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-cpssl</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/cpSSL.jar</systemPath>
+        </dependency>
+
+        <!-- JCryptoP -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-jcrypto</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCryptoP.jar</systemPath>
+        </dependency>
+
+        <!-- JCPxml -->
+        <dependency>
+            <groupId>ru.cryptopro.jcp</groupId>
+            <artifactId>jcp-xml</artifactId>
+            <version>5.0.49800-A</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/JCPxml.jar</systemPath>
+        </dependency>
+
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Jakarta Mail for email notifications -->
+        <dependency>
+            <groupId>com.sun.mail</groupId>
+            <artifactId>jakarta.mail</artifactId>
+            <version>2.0.1</version>
+        </dependency>
+
+        <dependency>
+            <groupId>info.picocli</groupId>
+            <artifactId>picocli</artifactId>
+            <version>${picocli.version}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>rfm-downloader</finalName>
+        <plugins>
+            <!-- Copy runtime dependencies to target/libs -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
+                            <includeScope>compile</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Build a thin JAR with classpath in the manifest -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <classpathPrefix>libs/</classpathPrefix>
+                            <mainClass>org.ikozmin.rfm.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Build a distribution ZIP archive -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                        <configuration>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <descriptors>
+                                <descriptor>src/main/resources/assembly.xml</descriptor>
+                            </descriptors>
+                            <finalName>${project.artifactId}-${project.version}</finalName>
+                            <outputDirectory>${project.build.directory}/distr</outputDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
+</project>
