@@ -46,7 +46,7 @@
     "Directory": "events/registry-updated"
   },
   "ZenithTrigger": {
-    "Enabled": false,
+    "Enabled": true,
     "Command": "run-zenith-once.bat",
     "TimeoutSeconds": 1800
   }

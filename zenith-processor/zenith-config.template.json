@@ -8,20 +8,13 @@
     "Password": "ZENITH_PASSWORD",
     "ServerName": "",
     "Import": {
-      "FileFormat": "xml",
-      "Append": false
+      "Enabled": true
     },
     "MassCheck": {
-      "Subsystem": "",
-      "EmitentId": "",
-      "Periodic": false
+      "Enabled": true
     },
     "Report": {
       "Enabled": true,
-      "OutDocType": 10217,
-      "Format": "TerroristsXml",
-      "AssignOutDocNum": false,
-      "FilterTemplatePath": "config/zenith/t38-filter-template.xml",
       "OutputDirectory": "downloads/zenith-reports"
     }
   }

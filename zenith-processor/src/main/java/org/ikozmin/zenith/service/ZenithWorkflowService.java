@@ -9,6 +9,12 @@ import org.slf4j.LoggerFactory;
 public final class ZenithWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(ZenithWorkflowService.class);
 
+    private static final String PERSON_LIST_FILE_FORMAT = "xml";
+    private static final boolean PERSON_LIST_APPEND = false;
+
+    private static final long ALL_EMITENTS_ID = -1L;
+    private static final boolean MASS_CHECK_PERIODIC = false;
+
     private final ZenithConfig config;
     private final ZenithApiClient apiClient;
 
@@ -23,36 +29,45 @@ public final class ZenithWorkflowService {
                 event.catalog(),
                 event.registryFile());
 
-        importPersonList(event);
-        runMassCheck();
+        importPersonListIfEnabled(event);
+        runMassCheckIfEnabled();
         createReportIfEnabled(event);
 
         log.info("Zenith workflow completed. eventId={}", event.eventId());
     }
 
-    private void importPersonList(RegistryUpdatedEvent event) {
+    private void importPersonListIfEnabled(RegistryUpdatedEvent event) {
         ZenithConfig.Import importConfig = config.getZenith().getImportConfig();
 
-        String fileFormat = importConfig == null ? "xml" : importConfig.getFileFormat();
-        boolean append = importConfig != null && importConfig.isAppend();
+        if (importConfig != null && !importConfig.isEnabled()) {
+            log.info("Zenith import step is disabled");
+            return;
+        }
 
-        apiClient.importPersonList(event.registryFile(), fileFormat, append);
+        apiClient.importPersonList(
+                event.registryFile(),
+                PERSON_LIST_FILE_FORMAT,
+                PERSON_LIST_APPEND
+        );
 
         log.info("Registry list imported into Zenith. eventId={}, file={}",
                 event.eventId(),
                 event.registryFile());
     }
 
-    private void runMassCheck() {
+    private void runMassCheckIfEnabled() {
         ZenithConfig.MassCheck massCheck = config.getZenith().getMassCheck();
 
-        String subsystem = massCheck == null ? null : massCheck.getSubsystem();
-        String emitentId = massCheck == null ? null : massCheck.getEmitentId();
-        boolean periodic = massCheck != null && massCheck.isPeriodic();
+        if (massCheck != null && !massCheck.isEnabled()) {
+            log.info("Zenith mass check step is disabled");
+            return;
+        }
 
-        apiClient.runMassCheck(subsystem, emitentId, periodic);
+        apiClient.runMassCheck(ALL_EMITENTS_ID, MASS_CHECK_PERIODIC);
 
-        log.info("Zenith AML/CFT mass check started");
+        log.info("Zenith AML/CFT mass check started. emitentId={}, periodic={}",
+                ALL_EMITENTS_ID,
+                MASS_CHECK_PERIODIC);
     }
 
     private void createReportIfEnabled(RegistryUpdatedEvent event) {

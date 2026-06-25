@@ -5,6 +5,7 @@ import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.ikozmin.zenith.state.ZenithStateStore;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -13,21 +14,43 @@ import java.time.LocalDate;
 public final class ZenithReportService {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportService.class);
 
+    private static final int PODFT_REPORT_OUT_DOC_TYPE = 10217;
+    private static final boolean ASSIGN_OUT_DOC_NUM = false;
+    private static final long ALL_EMITENTS = -1L;
+    private static final String REPORT_FORMAT = "Xlsx";
+
+    private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter.xml");
+    private static final Path STATE_FILE = Path.of("downloads", "zenith-state.properties");
+
+    private final ZenithStateStore stateStore;
+
     private final ZenithApiClient apiClient;
     private final ZenithConfig.Report config;
 
     public ZenithReportService(ZenithApiClient apiClient, ZenithConfig.Report config) {
         this.apiClient = apiClient;
         this.config = config;
+        this.stateStore = new ZenithStateStore(STATE_FILE);
     }
 
     public Path createAndDownloadReport(RegistryUpdatedEvent event) {
         try {
-            String filterXml = loadFilterXml(event);
+            LocalDate endDate = resolveCurrentCheckDate(event);
+            LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate()
+                    .orElse(endDate);
+
+            String filterXml = loadFilterXml();
+
+            ZenithApiClient.ReportCreateData data = new ZenithApiClient.ReportCreateData(
+                    PODFT_REPORT_OUT_DOC_TYPE,
+                    ASSIGN_OUT_DOC_NUM,
+                    ALL_EMITENTS,
+                    beginDate.toString(),
+                    endDate.toString()
+            );
 
             ZenithApiClient.OutDocLink outDoc = apiClient.createReport(
-                    config.getOutDocType(),
-                    config.isAssignOutDocNum(),
+                    data,
                     filterXml
             );
 
@@ -35,15 +58,18 @@ public final class ZenithReportService {
             Files.createDirectories(outputDir);
 
             String fileName = "T38_"
-                    + LocalDate.now()
+                    + beginDate
+                    + "_"
+                    + endDate
                     + "_"
                     + event.idXml()
-                    + "."
-                    + config.getFormat().toLowerCase();
+                    + ".xlsx";
 
             Path targetFile = outputDir.resolve(fileName);
 
-            apiClient.downloadOutgoingDocument(outDoc.id(), config.getFormat(), targetFile);
+            apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
+
+            stateStore.saveSuccessfulCheck(endDate, event.idXml(), event.eventId());
 
             log.info("Zenith report downloaded. outDocId={}, file={}",
                     outDoc.id(),
@@ -55,23 +81,20 @@ public final class ZenithReportService {
         }
     }
 
-    private String loadFilterXml(RegistryUpdatedEvent event) throws Exception {
-        if (config.getFilterTemplatePath() == null || config.getFilterTemplatePath().isBlank()) {
-            return apiClient.getReportFilter(config.getOutDocType());
+    private String loadFilterXml() throws Exception {
+        if (!Files.isRegularFile(REPORT_FILTER_PATH)) {
+            throw new IllegalStateException("Zenith report filter file not found: "
+                    + REPORT_FILTER_PATH.toAbsolutePath());
         }
 
-        String template = Files.readString(Path.of(config.getFilterTemplatePath()));
-
-        return template
-                .replace("${BEGIN_DATE}", resolveBeginDate(event))
-                .replace("${END_DATE}", LocalDate.now().toString());
+        return Files.readString(REPORT_FILTER_PATH);
     }
 
-    private String resolveBeginDate(RegistryUpdatedEvent event) {
+    private LocalDate resolveCurrentCheckDate(RegistryUpdatedEvent event) {
         if (event.downloadedAt() == null || event.downloadedAt().isBlank()) {
-            return LocalDate.now().toString();
+            return LocalDate.now();
         }
 
-        return event.downloadedAt().substring(0, 10);
+        return LocalDate.parse(event.downloadedAt().substring(0, 10));
     }
 }

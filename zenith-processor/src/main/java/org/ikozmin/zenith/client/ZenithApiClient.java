@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.ikozmin.common.json.JsonMapper;
 import org.ikozmin.zenith.config.ZenithConfig;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -28,29 +27,28 @@ public final class ZenithApiClient {
     }
 
     public void importPersonList(Path file, String fileFormat, boolean append) {
-        URI uri = uri("/api/v1/opercontrol/person_lists"
-                + "?file_format=" + encode(fileFormat)
-                + "&append=" + append);
+        try {
+            if (file == null || !Files.isRegularFile(file)) {
+                throw new IllegalArgumentException("Person list file not found: " + file);
+            }
 
-        HttpRequest request = base(uri)
-                .header("Content-Type", "application/octet-stream")
-                .POST(HttpRequest.BodyPublishers.ofFile(file))
-                .build();
+            URI uri = uri("/api/v1/opercontrol/person_lists"
+                    + "?file_format=" + encode(fileFormat)
+                    + "&append=" + append);
 
-        sendNoBody(request, "import person list");
+            HttpRequest request = base(uri)
+                    .header("Content-Type", "application/octet-stream")
+                    .POST(HttpRequest.BodyPublishers.ofFile(file))
+                    .build();
+
+            sendNoBody(request, "import person list");
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to prepare person list import request. file=" + file, e);
+        }
     }
 
-    public void runMassCheck(String subsystem, String emitentId, boolean periodic) {
-        StringBuilder query = new StringBuilder();
-        query.append("?periodic=").append(periodic);
-
-        if (!isBlank(subsystem)) {
-            query.append("&subsystem=").append(encode(subsystem));
-        }
-
-        if (!isBlank(emitentId)) {
-            query.append("&emitent_id=").append(encode(emitentId));
-        }
+    public void runMassCheck(long emitentId, boolean periodic) {
+        String query = "?periodic=" + periodic + "&emitent_id=" + emitentId;
 
         HttpRequest request = base(uri("/api/v1/opercontrol/aml_cft/mass_check" + query))
                 .POST(HttpRequest.BodyPublishers.noBody())
@@ -67,12 +65,15 @@ public final class ZenithApiClient {
         return sendString(request, "get report filter");
     }
 
-    public OutDocLink createReport(int outDocType, boolean assignOutDocNum, String filterXml) {
+    public OutDocLink createReport(ReportCreateData data, String filterXml) {
         String boundary = "----ZenithBoundary" + System.currentTimeMillis();
 
-        String dataJson = """
-                {"outDocType":%d,"assignOutDocNum":%s}
-                """.formatted(outDocType, assignOutDocNum);
+        String dataJson;
+        try {
+            dataJson = JsonMapper.get().writeValueAsString(data);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize Zenith report data", e);
+        }
 
         byte[] body = MultipartBodyBuilder.create(boundary)
                 .part("data", "application/json", dataJson.getBytes(StandardCharsets.UTF_8))
@@ -204,5 +205,14 @@ public final class ZenithApiClient {
             String uid,
             String name
     ) {
+    }
+
+    public record ReportCreateData(
+            int outDocType,
+            boolean assignOutDocNum,
+            long emitent,
+            String beginDate,
+            String endDate
+    ){
     }
 }

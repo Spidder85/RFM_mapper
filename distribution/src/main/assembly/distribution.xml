@@ -1,0 +1,68 @@
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.0.0 https://maven.apache.org/xsd/assembly-2.0.0.xsd">
+    <id>dist</id>
+    <formats>
+        <format>zip</format>
+    </formats>
+    <includeBaseDirectory>false</includeBaseDirectory>
+
+    <fileSets>
+        <fileSet>
+            <directory>${project.parent.basedir}/rfm-downloader/target</directory>
+            <outputDirectory/>
+            <includes>
+                <include>rfm-downloader.jar</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
+            <directory>${project.parent.basedir}/zenith-processor/target</directory>
+            <outputDirectory/>
+            <includes>
+                <include>zenith-processor.jar</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
+            <directory>${project.parent.basedir}/rfm-downloader/target/libs</directory>
+            <outputDirectory>libs</outputDirectory>
+            <includes>
+                <include>*.jar</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
+            <directory>${project.parent.basedir}/rfm-downloader</directory>
+            <outputDirectory/>
+            <includes>
+                <include>config.json</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
+            <directory>${project.parent.basedir}/zenith-processor</directory>
+            <outputDirectory/>
+            <includes>
+                <include>zenith-config.json</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
+            <directory>${project.parent.basedir}/zenith-processor/config</directory>
+            <outputDirectory>config</outputDirectory>
+            <includes>
+                <include>zenith/**</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
+            <directory>${project.parent.basedir}</directory>
+            <outputDirectory/>
+            <includes>
+                <include>run-rfm.bat</include>
+                <include>run-zenith-once.bat</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+</assembly>

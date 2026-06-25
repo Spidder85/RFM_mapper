@@ -84,85 +84,37 @@ public final class ZenithConfig {
         }
     }
 
+
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class Import {
-        @JsonProperty("FileFormat")
-        private String fileFormat;
+        @JsonProperty("Enabled")
+        private Boolean enabled;
 
-        @JsonProperty("Append")
-        private Boolean append;
-
-        public String getFileFormat() {
-            return fileFormat == null || fileFormat.isBlank() ? "xml" : fileFormat;
-        }
-
-        public boolean isAppend() {
-            return append != null && append;
+        public boolean isEnabled() {
+            return enabled == null || enabled;
         }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class MassCheck {
-        @JsonProperty("Subsystem")
-        private String subsystem;
+        @JsonProperty("Enabled")
+        private Boolean enabled;
 
-        @JsonProperty("EmitentId")
-        private String emitentId;
-
-        @JsonProperty("Periodic")
-        private Boolean periodic;
-
-        public String getSubsystem() {
-            return subsystem;
-        }
-
-        public String getEmitentId() {
-            return emitentId;
-        }
-
-        public boolean isPeriodic() {
-            return periodic != null && periodic;
+        public boolean isEnabled() {
+            return enabled == null || enabled;
         }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class Report {
         @JsonProperty("Enabled")
-        private boolean enabled;
-
-        @JsonProperty("OutDocType")
-        private int outDocType;
-
-        @JsonProperty("Format")
-        private String format;
-
-        @JsonProperty("AssignOutDocNum")
-        private boolean assignOutDocNum;
-
-        @JsonProperty("FilterTemplatePath")
-        private String filterTemplatePath;
+        private Boolean enabled;
 
         @JsonProperty("OutputDirectory")
         private String outputDirectory;
 
         public boolean isEnabled() {
-            return enabled;
-        }
-
-        public int getOutDocType() {
-            return outDocType == 0 ? 10217 : outDocType;
-        }
-
-        public String getFormat() {
-            return format == null || format.isBlank() ? "Xlsx" : format;
-        }
-
-        public boolean isAssignOutDocNum() {
-            return assignOutDocNum;
-        }
-
-        public String getFilterTemplatePath() {
-            return filterTemplatePath;
+            return enabled == null || enabled;
         }
 
         public String getOutputDirectory() {
