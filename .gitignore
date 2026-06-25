@@ -182,7 +182,8 @@ __screenshots__/
 
 .gigacode/
 
-config.json
+*.json
+!*.template.json
 *.cer
 *.pfx
 *.p12
