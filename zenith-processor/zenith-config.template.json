@@ -18,8 +18,8 @@
     },
     "Report": {
       "Enabled": true,
-      "OutDocType": 38,
-      "Format": "Xlsx",
+      "OutDocType": 10217,
+      "Format": "TerroristsXml",
       "AssignOutDocNum": false,
       "FilterTemplatePath": "config/zenith/t38-filter-template.xml",
       "OutputDirectory": "downloads/zenith-reports"

@@ -1,0 +1,25 @@
+/zenith-object/api/v1/outgoing_documents/create
+data-object
+{
+  "outDocType": 10217,
+  "assignOutDocNum": false,
+  "emitent": -1,
+  "beginDate": "2026-06-22",
+  "endDate": "2026-06-24"
+}
+
+filter (не полный)Ж:
+содержит только: Массовая проверка лиц, Проверка лица, Установка признака риска, Отмена признака риска
+не содержит: Критерии проверки [40] - "Лицо найдено в списке террористов"
+<FILTER>
+  <CHECKKIND>
+    <INC>1</INC>
+    <LIST>1;2</LIST>
+  </CHECKKIND>
+  <ACTION>
+    <INC>1</INC>
+    <LIST>1;2</LIST>
+  </ACTION>
+  <FILTER_VERSION>43</FILTER_VERSION>
+  <FILTER_SP>1</FILTER_SP>
+</FILTER>

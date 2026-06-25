@@ -150,7 +150,7 @@ public final class ZenithConfig {
         }
 
         public int getOutDocType() {
-            return outDocType == 0 ? 38 : outDocType;
+            return outDocType == 0 ? 10217 : outDocType;
         }
 
         public String getFormat() {
