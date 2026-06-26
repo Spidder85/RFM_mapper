@@ -32,7 +32,7 @@ public final class ZenithApiClient {
                 throw new IllegalArgumentException("Person list file not found: " + file);
             }
 
-            URI uri = uri("/api/v1/opercontrol/person_lists"
+            URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists"
                     + "?file_format=" + encode(fileFormat)
                     + "&append=" + append);
 
@@ -50,7 +50,7 @@ public final class ZenithApiClient {
     public void runMassCheck(boolean periodic) {
         String query = "?periodic=" + periodic;
 
-        HttpRequest request = base(uri("/api/v1/opercontrol/aml_cft/mass_check" + query))
+        HttpRequest request = base(uri("/zenith-object/api/v1/opercontrol/aml_cft/mass_check" + query))
                 .POST(HttpRequest.BodyPublishers.noBody())
                 .build();
 
@@ -58,7 +58,7 @@ public final class ZenithApiClient {
     }
 
     public String getReportFilter(int outDocType) {
-        HttpRequest request = base(uri("/api/v1/outgoing_documents/" + outDocType + "/filter"))
+        HttpRequest request = base(uri("/zenith-object/api/v1/outgoing_documents/" + outDocType + "/filter"))
                 .GET()
                 .build();
 
@@ -84,7 +84,7 @@ public final class ZenithApiClient {
 
         byte[] body = builder.build();
 
-        HttpRequest request = base(uri("/api/v1/outgoing_documents/create"))
+        HttpRequest request = base(uri("/zenith-object/api/v1/outgoing_documents/create"))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(HttpRequest.BodyPublishers.ofByteArray(body))
                 .build();
@@ -109,7 +109,7 @@ public final class ZenithApiClient {
         try {
             Files.createDirectories(targetFile.getParent());
 
-            HttpRequest request = base(uri("/api/v1/outgoing_documents/" + encode(outDocId)
+            HttpRequest request = base(uri("/zenith-object/api/v1/outgoing_documents/" + encode(outDocId)
                     + "?format=" + encode(format)))
                     .GET()
                     .build();
