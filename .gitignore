@@ -187,6 +187,10 @@ __screenshots__/
 *.cer
 *.pfx
 *.p12
+# папка логов
 logs/
+# папка загрузок
 downloads/
 target/
+# пакпка событий
+events/
