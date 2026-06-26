@@ -10,6 +10,7 @@ import org.ikozmin.zenith.state.ZenithStateStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 public final class ZenithReportService {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportService.class);
@@ -59,12 +60,13 @@ public final class ZenithReportService {
             Path outputDir = Path.of(config.getOutputDirectory());
             Files.createDirectories(outputDir);
 
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy_MM_dd");
             String fileName = "T38_"
-                    + beginDate
-                    + "_"
-                    + endDate
-                    + "_"
-                    + event.idXml()
+                    + beginDate.format(formatter)
+                    + "-"
+                    + endDate.format(formatter)
+                    + "_терр"
+                    //+ event.idXml()
                     + ".xlsx";
 
             Path targetFile = outputDir.resolve(fileName);
