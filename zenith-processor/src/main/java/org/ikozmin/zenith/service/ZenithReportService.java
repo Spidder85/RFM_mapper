@@ -39,10 +39,12 @@ public final class ZenithReportService {
             LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate()
                     .orElse(endDate);
 
-            String filterXml = loadFilterXml();
+            String filterXml = config.isFilter() ? loadFilterXml() : null;
+
+            int outDocType = config.getOutDocType();
 
             ZenithApiClient.ReportCreateData data = new ZenithApiClient.ReportCreateData(
-                    PODFT_REPORT_OUT_DOC_TYPE,
+                    outDocType,
                     ASSIGN_OUT_DOC_NUM,
                     ALL_EMITENTS,
                     beginDate.toString(),

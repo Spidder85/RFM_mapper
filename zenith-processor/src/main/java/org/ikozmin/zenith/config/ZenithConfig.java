@@ -110,11 +110,34 @@ public final class ZenithConfig {
         @JsonProperty("Enabled")
         private Boolean enabled;
 
+        @JsonProperty("OutDocType")
+        private Integer outDocType;
+
+        @JsonProperty("Filter")
+        private Boolean filter;
+
+        @JsonProperty("FilterTemplatePath")
+        private String filterTemplatePath;
+
         @JsonProperty("OutputDirectory")
         private String outputDirectory;
 
         public boolean isEnabled() {
             return enabled == null || enabled;
+        }
+
+        public int getOutDocType() {
+            return outDocType == null ? 10217 : outDocType;
+        }
+
+        public boolean isFilter() {
+            return filter == null || filter;
+        }
+
+        public String getFilterTemplatePath() {
+            return filterTemplatePath == null || filterTemplatePath.isBlank()
+                    ? "config/zenith/podft-report-filter.xml"
+                    : filterTemplatePath;
         }
 
         public String getOutputDirectory() {

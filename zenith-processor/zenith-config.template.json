@@ -7,12 +7,15 @@
     "UserName": "ZENITH_USER",
     "Password": "ZENITH_PASSWORD",
     "ServerName": "",
+
     "Import": {
       "Enabled": true
     },
+
     "MassCheck": {
       "Enabled": true
     },
+
     "Report": {
       "Enabled": true,
       "OutDocType": 10217,

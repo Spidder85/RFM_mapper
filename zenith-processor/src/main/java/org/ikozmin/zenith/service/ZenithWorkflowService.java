@@ -9,10 +9,8 @@ import org.slf4j.LoggerFactory;
 public final class ZenithWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(ZenithWorkflowService.class);
 
-    private static final String PERSON_LIST_FILE_FORMAT = "xml";
+    private static final String PERSON_LIST_FILE_FORMAT = "TerroristsXml";
     private static final boolean PERSON_LIST_APPEND = false;
-
-    private static final long ALL_EMITENTS_ID = -1L;
     private static final boolean MASS_CHECK_PERIODIC = false;
 
     private final ZenithConfig config;
@@ -63,10 +61,9 @@ public final class ZenithWorkflowService {
             return;
         }
 
-        apiClient.runMassCheck(ALL_EMITENTS_ID, MASS_CHECK_PERIODIC);
+        apiClient.runMassCheck(MASS_CHECK_PERIODIC);
 
-        log.info("Zenith AML/CFT mass check started. emitentId={}, periodic={}",
-                ALL_EMITENTS_ID,
+        log.info("Zenith AML/CFT mass check started. periodic={}",
                 MASS_CHECK_PERIODIC);
     }
 

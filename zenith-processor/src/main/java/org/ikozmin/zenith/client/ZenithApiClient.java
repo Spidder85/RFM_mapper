@@ -47,8 +47,8 @@ public final class ZenithApiClient {
         }
     }
 
-    public void runMassCheck(long emitentId, boolean periodic) {
-        String query = "?periodic=" + periodic + "&emitent_id=" + emitentId;
+    public void runMassCheck(boolean periodic) {
+        String query = "?periodic=" + periodic;
 
         HttpRequest request = base(uri("/api/v1/opercontrol/aml_cft/mass_check" + query))
                 .POST(HttpRequest.BodyPublishers.noBody())
@@ -75,10 +75,14 @@ public final class ZenithApiClient {
             throw new IllegalStateException("Failed to serialize Zenith report data", e);
         }
 
-        byte[] body = MultipartBodyBuilder.create(boundary)
-                .part("data", "application/json", dataJson.getBytes(StandardCharsets.UTF_8))
-                .part("filter", "application/xml", filterXml.getBytes(StandardCharsets.UTF_8))
-                .build();
+        MultipartBodyBuilder builder = MultipartBodyBuilder.create(boundary)
+                .part("data", "application/json", dataJson.getBytes(StandardCharsets.UTF_8));
+
+        if (filterXml != null && !filterXml.isBlank()) {
+            builder.part("filter", "application/xml", filterXml.getBytes(StandardCharsets.UTF_8));
+        }
+
+        byte[] body = builder.build();
 
         HttpRequest request = base(uri("/api/v1/outgoing_documents/create"))
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
