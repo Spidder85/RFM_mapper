@@ -1,32 +1,32 @@
 {
   "Credentials": {
-    "UserName": "YOUR_RFM_USERNAME",
-    "Password": "YOUR_RFM_PASSWORD"
+    "UserName": "1660055801165501001",
+    "Password": "J5!!oEa#4J0Q5zW#!@VuJ"
   },
   "Certificate": {
-    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
+    "SerialNumber": "40601D0005296A417B49C00C680A0452",
     "UseCryptoPro": true
   },
   "DefaultCatalog": "te21",
   "UseTestContour": false,
-  "OutputDirectory": "downloads",
+  "OutputDirectory": "\\\\t-cent\\Zen-co\\terrlist\\терр_экстр\\test\\",
   "Retention": {
     "Enabled": true,
     "KeepAuditDays": 60,
     "KeepDownloadedVersions": 10
   },
   "Notifications": {
-    "Enabled": false,
+    "Enabled": true,
     "Email": {
-      "Enabled": false,
-      "SmtpHost": "smtp.your-company.ru",
+      "Enabled": true,
+      "SmtpHost": "10.16.2.222",
       "SmtpPort": 25,
       "SmtpUsername": "",
       "SmtpPassword": "",
       "UseTls": false,
-      "From": "noreply@your-company.ru",
+      "From": "noreply@earc.ru",
       "To": [
-        "admin@your-company.ru"
+        "KozminIU@earc.ru"
       ],
       "Subject": "Обновлен перечень Росфинмониторинга",
       "IncludeAttachment": false,
@@ -34,9 +34,9 @@
     },
     "Telegram": {
       "Enabled": false,
-      "Token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "Token": "8907019166:AAGTnG1US76hHZq8dv7KfjM9xpH3TRSFghc",
       "ChatIds": [
-        "YOUR_TELEGRAM_CHAT_ID"
+        "1350749394"
       ],
       "ApiIp": "149.154.167.220",
       "IncludeFileChecksum": true

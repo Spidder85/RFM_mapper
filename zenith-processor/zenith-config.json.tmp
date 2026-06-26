@@ -3,15 +3,15 @@
     "Directory": "events/registry-updated"
   },
   "Zenith": {
-    "BaseUrl": "https://zenith-server/zenith-object",
-    "UserName": "ZENITH_USER",
-    "Password": "ZENITH_PASSWORD",
+    "BaseUrl": "10.16.2.68:8484",
+    "UserName": "robot",
+    "Password": "Robot37",
     "ServerName": "",
     "Import": {
-      "Enabled": true
+      "Enable": true
     },
     "MassCheck": {
-      "Enabled": true
+      "Enable": true
     },
     "Report": {
       "Enabled": true,
