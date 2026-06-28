@@ -25,7 +25,7 @@
         </fileSet>
 
         <fileSet>
-            <directory>${project.parent.basedir}/rfm-downloader/target/libs</directory>
+            <directory>${project.build.directory}/libs</directory>
             <outputDirectory>libs</outputDirectory>
             <includes>
                 <include>*.jar</include>
