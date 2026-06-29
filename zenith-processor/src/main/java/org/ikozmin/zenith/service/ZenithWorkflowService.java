@@ -3,8 +3,17 @@ package org.ikozmin.zenith.service;
 import org.ikozmin.common.event.RegistryUpdatedEvent;
 import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
+import org.ikozmin.zenith.fes.FesPackage;
+import org.ikozmin.zenith.fes.FesPackageService;
+import org.ikozmin.zenith.person.FoundPersonsStore;
+import org.ikozmin.zenith.report.ZenithReportAnalysis;
+import org.ikozmin.zenith.report.ZenithReportAnalyzer;
+import org.ikozmin.zenith.report.ZenithReportPerson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.file.Path;
+import java.util.List;
 
 public final class ZenithWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(ZenithWorkflowService.class);
@@ -76,6 +85,39 @@ public final class ZenithWorkflowService {
         }
 
         ZenithReportService reportService = new ZenithReportService(apiClient, report);
-        reportService.createAndDownloadReport(event);
+        ZenithReportResult reportResult = reportService.createAndDownloadReport(event);
+
+        ZenithReportAnalyzer analyzer = new ZenithReportAnalyzer();
+        ZenithReportAnalysis analysis = analyzer.analyze(reportResult.reportFile());
+
+        if (!analysis.hasPersons()) {
+            log.info("No terrorist matches found in Zenith report. file={}",
+                    reportResult.reportFile().toAbsolutePath());
+            return;
+        }
+
+        FoundPersonsStore personsStore = new FoundPersonsStore(
+                Path.of("data", "zenith-found-persons.tsv")
+        );
+
+        List<ZenithReportPerson> newPersons = personsStore.findNewPersons(
+                analysis.persons(),
+                reportResult.endDate()
+        );
+
+        if (newPersons.isEmpty()) {
+            log.info("Zenith report contains known persons only. totalPersons={}",
+                    analysis.persons().size());
+            return;
+        }
+
+        FesPackageService fesPackageService = new FesPackageService();
+        List<FesPackage> packages = fesPackageService.preparePackages(newPersons, reportResult);
+
+        personsStore.markFesPrepared(newPersons);
+
+        log.warn("New terrorist list matches found. newPersons={}, packages={}",
+                newPersons.size(),
+                packages.stream().map(FesPackage::directory).toList());
     }
 }

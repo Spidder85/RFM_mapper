@@ -15,12 +15,12 @@ import java.time.format.DateTimeFormatter;
 public final class ZenithReportService {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportService.class);
 
-    private static final int PODFT_REPORT_OUT_DOC_TYPE = 10217;
+    //private static final int PODFT_REPORT_OUT_DOC_TYPE = 10217;
     private static final boolean ASSIGN_OUT_DOC_NUM = false;
     private static final long ALL_EMITENTS = -1L;
     private static final String REPORT_FORMAT = "Xlsx";
 
-    private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter.xml");
+    //private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter.xml");
     private static final Path STATE_FILE = Path.of("downloads", "zenith-state.properties");
 
     private final ZenithStateStore stateStore;
@@ -34,7 +34,7 @@ public final class ZenithReportService {
         this.stateStore = new ZenithStateStore(STATE_FILE);
     }
 
-    public Path createAndDownloadReport(RegistryUpdatedEvent event) {
+    public ZenithReportResult createAndDownloadReport(RegistryUpdatedEvent event) {
         try {
             LocalDate endDate = resolveCurrentCheckDate(event);
             LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate()
@@ -79,19 +79,21 @@ public final class ZenithReportService {
                     outDoc.id(),
                     targetFile.toAbsolutePath());
 
-            return targetFile;
+            return new ZenithReportResult(targetFile, beginDate, endDate, outDoc.id());
         } catch (Exception e) {
             throw new IllegalStateException("Failed to create and download Zenith report", e);
         }
     }
 
     private String loadFilterXml() throws Exception {
-        if (!Files.isRegularFile(REPORT_FILTER_PATH)) {
+        Path filterPath = Path.of(config.getFilterTemplatePath());
+
+        if (!Files.isRegularFile(filterPath)) {
             throw new IllegalStateException("Zenith report filter file not found: "
-                    + REPORT_FILTER_PATH.toAbsolutePath());
+                    + filterPath.toAbsolutePath());
         }
 
-        return Files.readString(REPORT_FILTER_PATH);
+        return Files.readString(filterPath);
     }
 
     private LocalDate resolveCurrentCheckDate(RegistryUpdatedEvent event) {
