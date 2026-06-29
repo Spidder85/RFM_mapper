@@ -194,3 +194,5 @@ downloads/
 target/
 # пакпка событий
 events/
+/data/
+config/
