@@ -1,6 +1,7 @@
 package org.ikozmin.zenith.service;
 
 import org.ikozmin.common.event.RegistryUpdatedEvent;
+import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.fes.FesPackage;
@@ -13,6 +14,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class ZenithWorkflowService {
@@ -30,7 +32,7 @@ public final class ZenithWorkflowService {
         this.apiClient = new ZenithApiClient(config.getZenith());
     }
 
-    public void process(RegistryUpdatedEvent event) {
+    public ZenithProcessingSummary process(RegistryUpdatedEvent event) {
         log.info("Processing registry update event. eventId={}, catalog={}, file={}",
                 event.eventId(),
                 event.catalog(),
@@ -38,9 +40,12 @@ public final class ZenithWorkflowService {
 
         importPersonListIfEnabled(event);
         runMassCheckIfEnabled();
-        createReportIfEnabled(event);
+
+        ZenithProcessingSummary summary = createReportIfEnabled(event);
 
         log.info("Zenith workflow completed. eventId={}", event.eventId());
+
+        return summary;
     }
 
     private void importPersonListIfEnabled(RegistryUpdatedEvent event) {
@@ -76,12 +81,12 @@ public final class ZenithWorkflowService {
                 MASS_CHECK_PERIODIC);
     }
 
-    private void createReportIfEnabled(RegistryUpdatedEvent event) {
+    private ZenithProcessingSummary createReportIfEnabled(RegistryUpdatedEvent event) {
         ZenithConfig.Report report = config.getZenith().getReport();
 
         if (report == null || !report.isEnabled()) {
             log.info("Zenith report creation is disabled");
-            return;
+            return ZenithProcessingSummary.disabled(event.eventId());
         }
 
         ZenithReportService reportService = new ZenithReportService(apiClient, report);
@@ -93,7 +98,12 @@ public final class ZenithWorkflowService {
         if (!analysis.hasPersons()) {
             log.info("No terrorist matches found in Zenith report. file={}",
                     reportResult.reportFile().toAbsolutePath());
-            return;
+
+            return ZenithProcessingSummary.noNewPersons(
+                    event.eventId(),
+                    reportResult.reportFile(),
+                    0
+            );
         }
 
         FoundPersonsStore personsStore = new FoundPersonsStore(
@@ -108,16 +118,47 @@ public final class ZenithWorkflowService {
         if (newPersons.isEmpty()) {
             log.info("Zenith report contains known persons only. totalPersons={}",
                     analysis.persons().size());
-            return;
+            return ZenithProcessingSummary.noNewPersons(
+                    event.eventId(),
+                    reportResult.reportFile(),
+                    analysis.persons().size()
+            );
         }
 
-        FesPackageService fesPackageService = new FesPackageService();
+        Path fesOutputDir = Path.of(config.getZenith().getFes().getOutputDirectory());
+
+        FesPackageService fesPackageService = new FesPackageService(fesOutputDir);
         List<FesPackage> packages = fesPackageService.preparePackages(newPersons, reportResult);
 
         personsStore.markFesPrepared(newPersons);
 
+        List<ZenithProcessingSummary.Person> summaryPersons = new ArrayList<>();
+
+        for (int i = 0; i < newPersons.size(); i++) {
+            ZenithReportPerson person = newPersons.get(i);
+            FesPackage pack = packages.get(i);
+
+            summaryPersons.add(new ZenithProcessingSummary.Person(
+                    person.displayName(),
+                    person.accountNumber(),
+                    person.emitentName(),
+                    pack.directory()
+            ));
+        }
+
         log.warn("New terrorist list matches found. newPersons={}, packages={}",
                 newPersons.size(),
                 packages.stream().map(FesPackage::directory).toList());
+
+        return new ZenithProcessingSummary(
+                event.eventId(),
+                true,
+                reportResult.reportFile(),
+                analysis.persons().size(),
+                newPersons.size(),
+                fesOutputDir,
+                summaryPersons,
+                "Найдены новые лица: " + newPersons.size()
+        );
     }
 }
