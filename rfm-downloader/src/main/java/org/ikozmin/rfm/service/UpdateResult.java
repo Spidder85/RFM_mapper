@@ -9,7 +9,8 @@ public record UpdateResult(
         CatalogType catalogType,
         String oldIdXml,
         String idXml,
-        Path file,
+        Path registryFile,
+        Path archiveFile,
         String sha256,
         long fileSize,
         String downloadedAt
@@ -22,7 +23,7 @@ public record UpdateResult(
         return idXml;
     }
 
-    public Path getFile() {
-        return file;
+    public Path file() {
+        return registryFile;
     }
 }

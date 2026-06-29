@@ -15,7 +15,7 @@ public final class RegistryEventService {
         this.publisher = new FileEventPublisher(eventRootDir.resolve("new"));
     }
 
-    public Path publish(UpdateResult result) {
+    public PublishedRegistryEvent publish(UpdateResult result) {
         String eventId = LocalDateTime.now()
                 .toString()
                 .replace(":", "")
@@ -38,6 +38,6 @@ public final class RegistryEventService {
                 result.downloadedAt()
         );
 
-        return publisher.publish(event);
+        return new PublishedRegistryEvent(eventId, publisher.publish(event));
     }
 }
