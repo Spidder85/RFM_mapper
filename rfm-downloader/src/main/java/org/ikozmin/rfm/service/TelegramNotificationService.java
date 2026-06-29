@@ -2,6 +2,8 @@ package org.ikozmin.rfm.service;
 
 import org.ikozmin.rfm.config.TelegramConfig;
 import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.notification.NotificationMessage;
+import org.ikozmin.common.notification.NotificationSender;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,7 +13,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-public final class TelegramNotificationService {
+public final class TelegramNotificationService implements NotificationSender {
     private static final Logger log = LoggerFactory.getLogger(TelegramNotificationService.class);
     private static final String DEFAULT_TELEGRAM_API_IP = "149.154.167.220";
 
@@ -21,8 +23,30 @@ public final class TelegramNotificationService {
         this.config = config;
     }
 
+    @Override
     public boolean isEnabled() {
         return config != null && config.isEnabled();
+    }
+
+    @Override
+    public void send(NotificationMessage message) {
+        if (!isEnabled()) {
+            return;
+        }
+
+        try {
+            validate();
+
+            for (String chatId : config.getChatIds()) {
+                if (!isBlank(chatId)) {
+                    sendMessage(chatId.trim(), message.body());
+                }
+            }
+
+            log.info("Telegram notification sent. chats={}", config.getChatIds().size());
+        } catch (Exception e) {
+            log.error("Telegram notification failed: {}", e.getMessage(), e);
+        }
     }
 
     public void sendUpdateNotification(
