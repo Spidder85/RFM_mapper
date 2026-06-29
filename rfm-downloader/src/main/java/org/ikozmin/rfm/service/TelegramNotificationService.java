@@ -1,17 +1,13 @@
 package org.ikozmin.rfm.service;
 
-import org.ikozmin.rfm.config.TelegramConfig;
-import org.ikozmin.rfm.logging.Masking;
 import org.ikozmin.common.notification.NotificationMessage;
 import org.ikozmin.common.notification.NotificationSender;
+import org.ikozmin.rfm.config.TelegramConfig;
+import org.ikozmin.rfm.logging.Masking;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 
 public final class TelegramNotificationService implements NotificationSender {
     private static final Logger log = LoggerFactory.getLogger(TelegramNotificationService.class);
@@ -44,34 +40,6 @@ public final class TelegramNotificationService implements NotificationSender {
             }
 
             log.info("Telegram notification sent. chats={}", config.getChatIds().size());
-        } catch (Exception e) {
-            log.error("Telegram notification failed: {}", e.getMessage(), e);
-        }
-    }
-
-    public void sendUpdateNotification(
-            String catalogType,
-            String idXml,
-            Path filePath,
-            String checksum,
-            String oldIdXml
-    ) {
-        if (!isEnabled()) {
-            return;
-        }
-
-        try {
-            validate();
-
-            String text = buildMessage(catalogType, idXml, filePath, checksum, oldIdXml);
-
-            for (String chatId : config.getChatIds()) {
-                if (!isBlank(chatId)) {
-                    sendMessage(chatId.trim(), text);
-                }
-            }
-
-            log.info("Telegram notification sent. catalog={}, chats={}", catalogType, config.getChatIds().size());
         } catch (Exception e) {
             log.error("Telegram notification failed: {}", e.getMessage(), e);
         }
@@ -122,38 +90,6 @@ public final class TelegramNotificationService implements NotificationSender {
         log.info("Telegram message delivered. chatId={}", chatId);
     }
 
-    private String buildMessage(String catalogType, String idXml, Path filePath, String checksum, String oldIdXml) throws Exception {
-        StringBuilder message = new StringBuilder();
-
-        message.append("Обновлен перечень Росфинмониторинга").append('\n');
-        message.append('\n');
-        message.append("Загружена новая версия перечня.").append('\n');
-        message.append('\n');
-        message.append("Перечень: ").append(displayCatalogName(catalogType)).append('\n');
-        message.append("Дата загрузки: ").append(formatDateTime(LocalDateTime.now())).append('\n');
-
-        if (filePath != null) {
-            message.append("Файл: ").append(filePath.getFileName()).append('\n');
-
-            if (Files.exists(filePath)) {
-                message.append("Размер: ").append(formatFileSize(Files.size(filePath))).append('\n');
-            }
-        }
-
-        message.append('\n');
-        if (!isBlank(oldIdXml)) {
-            message.append("Предыдущая версия: ").append(oldIdXml).append('\n');
-        }
-
-        message.append("Новая версия: ").append(idXml).append('\n');
-
-        if (config.isIncludeFileChecksum() && !isBlank(checksum)) {
-            message.append("SHA-256: ").append(shortChecksum(checksum)).append('\n');
-        }
-
-        return message.toString();
-    }
-
     private void validate() {
         if (isBlank(config.getToken())) {
             throw new IllegalStateException("Notifications.Telegram.Token is empty");
@@ -162,39 +98,6 @@ public final class TelegramNotificationService implements NotificationSender {
         if (config.getChatIds() == null || config.getChatIds().isEmpty()) {
             throw new IllegalStateException("Notifications.Telegram.ChatIds is empty");
         }
-    }
-
-    private String displayCatalogName(String catalogType) {
-        if (catalogType == null) {
-            return "Неизвестный перечень";
-        }
-
-        return switch (catalogType.toLowerCase()) {
-            case "te2", "te21" -> "Террористы и экстремисты";
-            case "mvk" -> "Решения МВК";
-            case "un" -> "Перечень ООН";
-            case "un-rus" -> "Перечень ООН на русском языке";
-            default -> catalogType;
-        };
-    }
-
-    private String formatDateTime(LocalDateTime dateTime) {
-        return dateTime.format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"));
-    }
-
-    private String shortChecksum(String checksum) {
-        if (checksum == null || checksum.length() <= 16) {
-            return checksum;
-        }
-
-        return checksum.substring(0, 16) + "...";
-    }
-
-    private String formatFileSize(long size) {
-        if (size < 1024) return size + " B";
-        if (size < 1024 * 1024) return String.format("%.2f KB", size / 1024.0);
-        if (size < 1024 * 1024 * 1024) return String.format("%.2f MB", size / (1024.0 * 1024));
-        return String.format("%.2f GB", size / (1024.0 * 1024 * 1024));
     }
 
     private boolean isBlank(String value) {

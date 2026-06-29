@@ -13,6 +13,7 @@ import java.util.Locale;
 
 public final class FesPackageService {
     private static final DateTimeFormatter DATE = DateTimeFormatter.BASIC_ISO_DATE;
+
     private final Path outputDir;
 
     public FesPackageService(Path outputDir) {
@@ -23,7 +24,7 @@ public final class FesPackageService {
         try {
             List<FesPackage> result = new ArrayList<>();
 
-            for (ZenithReportPerson  person : persons) {
+            for (ZenithReportPerson person : persons) {
                 String safeName = safeFileName(person.personKey());
                 Path dir = outputDir
                         .resolve(reportResult.endDate().format(DATE))
