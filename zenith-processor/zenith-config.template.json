@@ -2,6 +2,9 @@
   "Events": {
     "Directory": "events/registry-updated"
   },
+  "Results": {
+    "Directory": "events/registry-updated/results"
+  },
   "Zenith": {
     "BaseUrl": "https://zenith-server/zenith-object",
     "UserName": "ZENITH_USER",
@@ -22,6 +25,10 @@
       "Filter": true,
       "FilterTemplatePath": "config/zenith/podft-report-filter.xml",
       "OutputDirectory": "downloads/zenith-reports"
+    },
+
+    "Fes": {
+      "OutputDirectory": "downloads/fes-packages"
     }
   }
 }
