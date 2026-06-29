@@ -34,7 +34,7 @@
 
         <fileSet>
             <directory>${project.parent.basedir}/rfm-downloader</directory>
-            <outputDirectory/>
+            <outputDirectory>config</outputDirectory>
             <includes>
                 <include>config.json</include>
             </includes>
@@ -42,7 +42,7 @@
 
         <fileSet>
             <directory>${project.parent.basedir}/zenith-processor</directory>
-            <outputDirectory/>
+            <outputDirectory>config</outputDirectory>
             <includes>
                 <include>zenith-config.json</include>
             </includes>
