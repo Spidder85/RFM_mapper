@@ -23,6 +23,10 @@ public record UpdateResult(
         return idXml;
     }
 
+    public Path getFile() {
+        return registryFile;
+    }
+
     public Path file() {
         return registryFile;
     }
