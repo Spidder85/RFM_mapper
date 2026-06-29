@@ -25,7 +25,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     private static final Logger log = LoggerFactory.getLogger(ZenithProcessorMain.class);
 
     @Option(names = {"-c", "--config"}, description = "Path to zenith config")
-    private Path configPath = Path.of("zenith-config.json");
+    private Path configPath = Path.of("config", "zenith-config.json");
 
     @Option(names = "--once", description = "Process one event and exit")
     private boolean once;

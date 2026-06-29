@@ -44,7 +44,7 @@ public final class Main implements Callable<Integer> {
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
     @Option(names = {"-c", "--config"}, description = "Path to config.json")
-    private Path configPath = Path.of("..", "config.json");
+    private Path configPath = Path.of("config", "config.json");
 
     @Option(names = {"-k", "--catalog"}, description = "Catalog: te2, te21, mvk, un, un-rus")
     private String catalog;
