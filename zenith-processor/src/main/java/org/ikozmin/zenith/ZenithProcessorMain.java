@@ -1,6 +1,8 @@
 package org.ikozmin.zenith;
 
 import org.ikozmin.common.event.FileEventConsumer;
+import org.ikozmin.common.event.ProcessingSummaryStore;
+import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.service.ZenithWorkflowService;
@@ -49,7 +51,16 @@ public final class ZenithProcessorMain implements Callable<Integer> {
             }
 
             try {
-                workflowService.process(claimedEvent.get().event());
+                ZenithProcessingSummary summary = workflowService.process(claimedEvent.get().event());
+
+                ProcessingSummaryStore summaryStore = new ProcessingSummaryStore(
+                        Path.of(config.getResults().getDirectory())
+                );
+
+                Path summaryFile = summaryStore.save(summary);
+
+                log.info("Zenith summary saved: {}", summaryFile.toAbsolutePath());
+
                 consumer.markProcessed(claimedEvent.get());
                 return 0;
             } catch (Exception e) {
