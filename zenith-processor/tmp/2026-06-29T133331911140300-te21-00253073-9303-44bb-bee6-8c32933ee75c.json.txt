@@ -1,0 +1,12 @@
+{
+  "eventId" : "2026-06-29T133331911140300-te21-00253073-9303-44bb-bee6-8c32933ee75c",
+  "eventType" : "RegistryUpdated",
+  "createdAt" : [ 2026, 6, 29, 13, 33, 31, 911140300 ],
+  "catalog" : "te21",
+  "oldIdXml" : null,
+  "idXml" : "bb363300-6483-4cd7-a673-4ba09c922349",
+  "registryFile" : "file://t-cent/Zen-co/terrlist/терр_экстр/test/260626/suspect_20260626T000000_bb363300.zip",
+  "sha256" : "8a8ebe268e6288812ab0ff24999b584271ecbfdf360c434fa02eb9b4ad4d3eff",
+  "fileSize" : 6176937,
+  "downloadedAt" : "2026-06-29T13:33:30.481467700"
+}
