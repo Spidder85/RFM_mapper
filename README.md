@@ -1,28 +1,53 @@
-# RFM Client
+# RFM Automation
 
-RFM Client is a Java command-line application for downloading Rosfinmonitoring registry updates through the Service Concentrator API.
+RFM Automation is a Java 21 multi-module command-line project for downloading Rosfinmonitoring registry updates, importing the updated terrorist/extremist registry into Zenith, checking Zenith results, preparing draft FES files, and sending one unified notification after all enabled processing stages are complete.
 
-The application is designed to run by schedule, for example once per hour from Windows Task Scheduler.
+The project is intended for scheduled execution, for example once per hour from Windows Task Scheduler.
 
-## Features
+## Modules
 
-- Authenticates in the Rosfinmonitoring API with a client certificate.
-- Checks whether the selected registry has a new `idXml`.
-- Downloads a registry file only when a new version is available.
-- Saves files atomically through a temporary `.part` file.
-- Validates downloaded ZIP/XML files.
-- Extracts ZIP registries after download.
-- Calculates SHA-256 checksum.
-- Stores local state to avoid duplicate downloads.
-- Saves audit JSON envelopes for access and diagnostics.
-- Sends optional email and Telegram notifications.
-- Cleans old audit files and old downloaded versions by retention settings.
+| Module | Purpose |
+| --- | --- |
+| `common` | Shared JSON, file event, Zenith summary, and notification contracts. |
+| `rfm-downloader` | Authenticates in Rosfinmonitoring, checks registry versions, downloads files, publishes update events, runs Zenith, and sends the final notification. |
+| `zenith-processor` | Consumes registry update events, imports XML into Zenith, runs mass check, downloads the report, analyzes it, and prepares draft FES packages. |
+| `distribution` | Builds the final ZIP package with jars, dependencies, scripts, configs, and Zenith filter files. |
+
+## Current Flow
+
+1. `rfm-downloader` authenticates in the Rosfinmonitoring Service Concentrator API.
+2. It checks the selected registry by `idXml`.
+3. If a new version exists, it downloads the registry archive or XML.
+4. For ZIP registries, it extracts the XML file.
+5. It publishes `events/registry-updated/new/*.json`; the event points to the extracted XML, not to the ZIP archive.
+6. It runs `zenith-processor`.
+7. `zenith-processor` imports the XML into Zenith, runs mass check, creates and downloads the `Xlsx` report.
+8. The report analyzer reads `Таблица_Проверок`, deduplicates rows by person key, and compares the result with the local TSV database.
+9. For new persons, draft FES files are created under `downloads/fes-packages`.
+10. `zenith-processor` writes `events/registry-updated/results/<eventId>-zenith-summary.json`.
+11. `rfm-downloader` reads the Zenith summary and sends one unified notification through enabled channels.
+
+Automatic FES sending to Rosfinmonitoring is not implemented. A human employee reviews the prepared drafts and decides what to do next.
+
+## Technology Stack
+
+- Java 21
+- Maven multi-module build
+- CryptoPro CSP/JCP/JTLS
+- Java `HttpClient`
+- Jackson
+- SLF4J + Logback
+- Jakarta Mail
+- Telegram Bot API through `curl --resolve`
+- Apache POI for Zenith `Xlsx` report parsing
+- picocli
+- JUnit 5, Mockito, AssertJ
 
 ## Supported Registries
 
 | Code | Description |
 | --- | --- |
-| `te21` | Terrorists and extremists registry, current production version |
+| `te21` | Current terrorists and extremists registry |
 | `te2` | Legacy terrorists and extremists registry |
 | `mvk` | MVK freeze registry |
 | `un` | UN registry |
@@ -30,246 +55,232 @@ The application is designed to run by schedule, for example once per hour from W
 
 Default catalog: `te21`.
 
-## Technology Stack
+## Distribution Layout
 
-- Java 21
-- Maven
-- CryptoPro CSP/JCP/JTLS
-- Jackson
-- SLF4J + Logback
-- Jakarta Mail
-- Telegram Bot API
-- picocli
-- JUnit 5, Mockito, AssertJ
-
-The project is intentionally not a web service. It is a compact scheduled utility.
-
-## Requirements
-
-- Java 21 runtime.
-- Maven for build.
-- CryptoPro CSP/JCP installed and configured.
-- Client certificate with private key.
-- Access to required Rosfinmonitoring API methods.
-- `curl` available in `PATH` when Telegram notifications are enabled.
-
-API base URL:
+The final ZIP is built by the `distribution` module:
 
 ```text
-https://portal.fedsfm.ru:8081/Services/fedsfm-service
+target/distr/rfm-automation-2.1.2.zip
 ```
 
-Telegram notifications use `curl --resolve` because `api.telegram.org` may be blocked or unavailable through normal DNS in some environments.
-
-## Build
-
-Run from the `java` directory:
-
-```powershell
-mvn clean package
-```
-
-Build output:
+Expected layout inside the ZIP:
 
 ```text
-target/rfm-client.jar
-target/libs/
-target/distr/rfm-client-2.0.0.zip
+rfm-downloader.jar
+zenith-processor.jar
+libs/
+config/
+  config.json
+  zenith-config.json
+  zenith/
+    podft-report-filter.xml
+run-rfm.bat
+run-zenith-once.bat
+```
+
+Runtime directories are created near the scripts:
+
+```text
+downloads/
+events/
+data/
+logs/
 ```
 
 ## Configuration
 
-Create a working config:
+Main RFM config:
 
 ```text
-config.template.json -> config.json
+config/config.json
 ```
 
-Minimal configuration:
+Zenith config:
+
+```text
+config/zenith-config.json
+```
+
+Important paths:
 
 ```json
 {
-  "Credentials": {
-    "UserName": "YOUR_RFM_USERNAME",
-    "Password": "YOUR_RFM_PASSWORD"
+  "Events": {
+    "Directory": "events/registry-updated"
   },
-  "Certificate": {
-    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
-    "UseCryptoPro": true
+  "Results": {
+    "Directory": "events/registry-updated/results"
   },
-  "DefaultCatalog": "te21",
-  "UseTestContour": false,
-  "OutputDirectory": "downloads",
-  "Notifications": {
-    "Enabled": false
+  "Zenith": {
+    "Fes": {
+      "OutputDirectory": "downloads/fes-packages"
+    },
+    "Report": {
+      "FilterTemplatePath": "config/zenith/podft-report-filter.xml",
+      "OutputDirectory": "downloads/zenith-reports"
+    }
   }
 }
 ```
 
-Secrets can also be provided through environment variables:
+Secrets can also be supplied by environment variables where supported:
 
 ```text
 RFM_USERNAME
 RFM_PASSWORD
 RFM_CERT_SERIAL
+ZENITH_PASSWORD
 ```
 
-Do not commit real credentials, private keys, downloaded registries, or logs.
-
-## CryptoPro Defaults
-
-The normal config does not need to include the full CryptoPro section. The application uses these defaults internally:
-
-```text
-Provider classes: JCSP, JCP, Crypto, JTLS
-Key store: REGISTRY / JCSP
-Key manager: GostX509 / JTLS
-Trust store: Windows-ROOT / SunMSCAPI
-Trust manager: PKIX
-SSL: GostTLSv1.2 / JTLS
-```
-
-If a specific machine requires custom settings, add the optional `Certificate.CryptoPro` section to `config.json`.
+Do not commit real credentials, private keys, downloaded registries, logs, or produced FES drafts.
 
 ## Run
 
-Production run:
+Normal full run:
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --prod --catalog te21
+```bat
+run-rfm.bat
 ```
 
-Test contour:
+Manual Zenith-only run for already published events:
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --test --catalog te2
+```bat
+run-zenith-once.bat
 ```
 
-Help:
+Direct command example:
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --help
+```bat
+java -cp "rfm-downloader.jar;libs\*" org.ikozmin.rfm.Main --config config\config.json --prod --catalog te21
 ```
 
-Options:
+## Events
+
+Registry update events are stored in:
 
 ```text
--c, --config <path>    path to config.json
--k, --catalog <code>   te2, te21, mvk, un, un-rus
-    --prod             production contour
-    --test             test contour
-    --contour <value>  prod or test
+events/registry-updated/
+  new/
+  processing/
+  processed/
+  failed/
+  results/
 ```
 
-The registry download directory is configured through `OutputDirectory` in `config.json`.
+The event field `registryFile` must point to the XML file used by Zenith. For TE/MVK ZIP downloads, `rfm-downloader` extracts the XML and publishes the XML path in the event.
 
-## Output
-
-Working directory:
+Zenith writes the result summary to:
 
 ```text
-downloads/
-  state.properties
-  audit/
-    *.json
+events/registry-updated/results/<eventId>-zenith-summary.json
 ```
 
-Downloaded registry files are stored in `OutputDirectory`. Files are grouped by registry date folder.
+## Zenith Processing
 
-Example:
+The Zenith processor performs these stages:
+
+1. Import registry XML to `/zenith-object/api/v1/opercontrol/person_lists`.
+2. Run AML/CFT mass check.
+3. Create report with `outDocType=10217`.
+4. Download report as `Xlsx`.
+5. Analyze the `Таблица_Проверок` sheet.
+6. Detect terrorist-list matches by `ЗЛ_РискОснования`.
+7. Deduplicate matches by normalized person name and account number.
+8. Compare matches with `data/zenith-found-persons.tsv`.
+9. Prepare draft FES packages for new persons.
+10. Save a summary JSON for the final notification.
+
+The local person database remains TSV for now:
 
 ```text
-downloads/
-  260622/
-    suspect_20260622_<id>.zip
-    *.xml
+data/zenith-found-persons.tsv
 ```
 
-`state.properties` stores the last known registry id, downloaded file path, download time, and checksum.
+H2 is intentionally not used yet. It becomes useful later when manual approval statuses, FES sending, tickets, and history need stronger querying and migrations.
 
-## Notifications
+## Draft FES Packages
 
-Notifications are disabled by default.
+Drafts are stored under:
 
-Email and Telegram can be enabled independently:
-
-```json
-"Notifications": {
-  "Enabled": true,
-  "Email": {
-    "Enabled": true,
-    "SmtpHost": "smtp.your-company.ru",
-    "SmtpPort": 25,
-    "SmtpUsername": "",
-    "SmtpPassword": "",
-    "UseTls": false,
-    "From": "noreply@your-company.ru",
-    "To": ["admin@your-company.ru"],
-    "Subject": "Обновлен перечень Росфинмониторинга",
-    "IncludeAttachment": false,
-    "IncludeFileChecksum": true
-  },
-  "Telegram": {
-    "Enabled": true,
-    "Token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "ChatIds": ["YOUR_TELEGRAM_CHAT_ID"],
-    "ApiIp": "149.154.167.220",
-    "IncludeFileChecksum": true
-  }
-}
+```text
+downloads/fes-packages/<check-date>/<person-key>/
 ```
 
-Notifications are sent only when a new file is downloaded.
+Each package currently contains:
 
-Telegram token is masked in logs. The request is sent through `curl --resolve api.telegram.org:443:<ApiIp>` to keep the HTTPS host name valid while connecting to a fixed Telegram IP.
-
-## Retention
-
-Retention is configured in `config.json`:
-
-```json
-"Retention": {
-  "Enabled": true,
-  "KeepAuditDays": 30,
-  "KeepDownloadedVersions": 10
-}
+```text
+FM03_DRAFT_<person-key>.xml
+FM03_DRAFT_<person-key>.xml.sig
 ```
 
-Retention removes old audit files and old downloaded registry versions for the current catalog.
+The `.sig` file is a placeholder. Real detached CryptoPro signing and `formalized-message/send` are future stages.
 
-## Scheduled Execution
+Current human workflow:
 
-Recommended scheduler setup:
+```text
+FOUND -> DRAFT_PREPARED -> REVIEW_REQUIRED
+```
 
-- Run once per hour.
-- Use a stable working directory.
-- Keep `config.json`, `downloads`, and `logs` outside temporary folders.
-- Do not run multiple instances at the same time.
-- Monitor exit code and `logs/rfm-client.log`.
+Future workflow may add:
 
-## Access Procedure
+```text
+APPROVED -> SENT -> TICKET_RECEIVED
+REJECTED
+```
 
-To request production access:
+## Unified Notifications
 
-1. Request access to test methods in the Rosfinmonitoring personal account.
-2. Run the required test methods.
-3. Save the JSON envelopes.
-4. Fill out the production access request form.
-5. Pack the form and envelopes into a ZIP archive.
-6. Send the archive through support.
+Notifications are sent once, after all enabled modules finish.
 
-The `authenticate` envelope is not required.
+The notification contains:
 
-## Troubleshooting
+1. RFM download section: catalog, idXml, XML path, checksum.
+2. Zenith section:
+   - "No new persons found", or
+   - list of new persons and draft FES package directories.
+3. Reminder that automatic sending to Rosfinmonitoring was not performed.
 
-### TLS errors
+Notification contracts live in `common`:
 
-Check certificate serial, private key availability, CryptoPro installation, and port `8081` in the API URL.
+```text
+org.ikozmin.common.notification.NotificationMessage
+org.ikozmin.common.notification.NotificationSender
+```
 
-### Telegram does not send
+Implementations live in `rfm-downloader`:
 
-Check `curl`, bot token, chat id, and `ApiIp`.
+```text
+EmailNotificationService
+TelegramNotificationService
+NotificationService
+UnifiedNotificationTextBuilder
+```
 
-### Email does not send
+Telegram uses `curl.exe --resolve api.telegram.org:443:<ApiIp>` so HTTPS still validates against `api.telegram.org` while connecting to a configured IP.
 
-Check SMTP host, port, authentication, TLS setting, sender permissions, and firewall rules.
+## Known Limitation
+
+Zenith import currently returns HTTP 200 with an empty body. The project does not yet parse Zenith operation logs to determine how many records were added, changed, or removed during import. The next improvement should use the Zenith log/export endpoint if its returned text contains reliable counters.
+
+## Build
+
+From the Maven project root:
+
+```bat
+mvn -q clean package
+```
+
+Root directory:
+
+```text
+G:\tmp\fedfsm\java
+```
+
+## Operational Notes
+
+- Run one instance at a time.
+- Prefer hourly scheduling.
+- Keep `config/`, `downloads/`, `events/`, `data/`, and `logs/` on persistent storage.
+- Check `events/registry-updated/failed` if Zenith processing fails.
+- Check `events/registry-updated/results` to inspect what Zenith reported.
+- Review draft FES files manually before any future sending step.

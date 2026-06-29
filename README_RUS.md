@@ -1,22 +1,47 @@
-# RFM Client
+# RFM Automation
 
-RFM Client - консольное Java-приложение для загрузки обновлений перечней Росфинмониторинга через API электронного сервиса "Сервисный концентратор".
+RFM Automation - multi-module Java 21 проект для автоматизации работы с перечнями Росфинмониторинга и Zenith.
 
-Программа рассчитана на запуск по расписанию, например один раз в час через Планировщик заданий Windows.
+Проект рассчитан на регулярный запуск по расписанию, например один раз в час через Планировщик заданий Windows.
 
-## Возможности
+## Модули
 
-- Авторизация в API Росфинмониторинга с клиентским сертификатом.
-- Проверка выбранного перечня по `idXml`.
-- Скачивание файла только при появлении новой версии.
-- Безопасное сохранение через временный `.part` файл.
-- Проверка скачанных ZIP/XML файлов.
-- Распаковка ZIP-файлов после загрузки.
-- Расчет SHA-256.
-- Сохранение локального состояния.
-- Сохранение audit JSON-файлов для диагностики и процедур доступа.
-- Опциональные уведомления по email и Telegram.
-- Очистка старых audit-файлов и старых версий по retention-настройкам.
+| Модуль | Назначение |
+| --- | --- |
+| `common` | Общие JSON-утилиты, файловые события, summary Zenith и интерфейсы уведомлений. |
+| `rfm-downloader` | Авторизация в Росфинмониторинге, проверка версий перечней, скачивание файлов, публикация события, запуск Zenith и отправка итогового уведомления. |
+| `zenith-processor` | Обработка события, загрузка XML в Zenith, массовая проверка, скачивание отчета, анализ отчета и подготовка черновиков ФЭС. |
+| `distribution` | Сборка итогового ZIP с jar-файлами, зависимостями, скриптами, конфигами и XML-фильтром Zenith. |
+
+## Текущий сценарий работы
+
+1. `rfm-downloader` авторизуется в API сервисного концентратора Росфинмониторинга.
+2. Проверяет выбранный перечень по `idXml`.
+3. Если появилась новая версия, скачивает архив или XML.
+4. Для ZIP-перечней распаковывает XML.
+5. Публикует событие `events/registry-updated/new/*.json`; в поле `registryFile` указывается XML, а не ZIP.
+6. Запускает `zenith-processor`.
+7. `zenith-processor` загружает XML в Zenith, запускает массовую проверку, формирует и скачивает отчет `Xlsx`.
+8. Анализатор читает лист `Таблица_Проверок`, убирает дубли и сравнивает найденных лиц с локальной TSV-базой.
+9. Для новых лиц готовятся черновики ФЭС в `downloads/fes-packages`.
+10. `zenith-processor` пишет результат в `events/registry-updated/results/<eventId>-zenith-summary.json`.
+11. `rfm-downloader` читает summary Zenith и отправляет одно общее уведомление.
+
+Автоматическая отправка ФЭС в Росфинмониторинг сейчас не выполняется. Сотрудник вручную проверяет подготовленные черновики и принимает решение.
+
+## Технологии
+
+- Java 21
+- Maven multi-module
+- CryptoPro CSP/JCP/JTLS
+- Java `HttpClient`
+- Jackson
+- SLF4J + Logback
+- Jakarta Mail
+- Telegram Bot API через `curl --resolve`
+- Apache POI для чтения `Xlsx`-отчетов Zenith
+- picocli
+- JUnit 5, Mockito, AssertJ
 
 ## Поддерживаемые перечни
 
@@ -24,213 +49,238 @@ RFM Client - консольное Java-приложение для загруз�
 | --- | --- |
 | `te21` | Актуальный перечень террористов и экстремистов |
 | `te2` | Старый метод перечня террористов и экстремистов |
-| `mvk` | Перечень решений МВК о замораживании денежных средств |
+| `mvk` | Перечень решений МВК |
 | `un` | Перечень ООН |
 | `un-rus` | Перечень ООН на русском языке |
 
 По умолчанию используется `te21`.
 
-## Технологии
+## Структура установочного ZIP
 
-- Java 21
-- Maven
-- CryptoPro CSP/JCP/JTLS
-- Jackson
-- SLF4J + Logback
-- Jakarta Mail
-- Telegram Bot API
-- picocli
-- JUnit 5, Mockito, AssertJ
-
-Это не web-сервис, а небольшая утилита для регулярного запуска.
-
-## Требования
-
-- Java 21.
-- Maven для сборки.
-- Установленный и настроенный CryptoPro CSP/JCP.
-- Клиентский сертификат с доступным закрытым ключом.
-- Доступ к нужным методам API Росфинмониторинга.
-- `curl` в `PATH`, если включены Telegram-уведомления.
-
-Базовый адрес API:
+Итоговый архив собирается модулем `distribution`:
 
 ```text
-https://portal.fedsfm.ru:8081/Services/fedsfm-service
+target/distr/rfm-automation-2.1.2.zip
 ```
 
-Для Telegram используется `curl --resolve`, потому что `api.telegram.org` может быть недоступен через обычный DNS.
-
-## Сборка
-
-Из папки `java`:
-
-```powershell
-mvn clean package
-```
-
-Результат сборки:
+Ожидаемая структура архива:
 
 ```text
-target/rfm-client.jar
-target/libs/
-target/distr/rfm-client-2.0.0.zip
+rfm-downloader.jar
+zenith-processor.jar
+libs/
+config/
+  config.json
+  zenith-config.json
+  zenith/
+    podft-report-filter.xml
+run-rfm.bat
+run-zenith-once.bat
 ```
 
-## Настройка
-
-Создайте рабочий конфиг:
+Рабочие папки создаются рядом со скриптами:
 
 ```text
-config.template.json -> config.json
+downloads/
+events/
+data/
+logs/
 ```
 
-Минимальный пример:
+## Конфигурация
+
+Основной конфиг РФМ:
+
+```text
+config/config.json
+```
+
+Конфиг Zenith:
+
+```text
+config/zenith-config.json
+```
+
+Важные пути в `zenith-config.json`:
 
 ```json
 {
-  "Credentials": {
-    "UserName": "YOUR_RFM_USERNAME",
-    "Password": "YOUR_RFM_PASSWORD"
+  "Events": {
+    "Directory": "events/registry-updated"
   },
-  "Certificate": {
-    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
-    "UseCryptoPro": true
+  "Results": {
+    "Directory": "events/registry-updated/results"
   },
-  "DefaultCatalog": "te21",
-  "UseTestContour": false,
-  "OutputDirectory": "downloads",
-  "Notifications": {
-    "Enabled": false
+  "Zenith": {
+    "Fes": {
+      "OutputDirectory": "downloads/fes-packages"
+    },
+    "Report": {
+      "FilterTemplatePath": "config/zenith/podft-report-filter.xml",
+      "OutputDirectory": "downloads/zenith-reports"
+    }
   }
 }
 ```
 
-Секреты можно передавать через переменные окружения:
+Секреты можно передавать через переменные окружения, где это поддержано:
 
 ```text
 RFM_USERNAME
 RFM_PASSWORD
 RFM_CERT_SERIAL
+ZENITH_PASSWORD
 ```
 
-Не храните реальные пароли, закрытые ключи, скачанные файлы и логи в репозитории.
+Не храните в репозитории реальные пароли, закрытые ключи, скачанные перечни, логи и подготовленные ФЭС-файлы.
 
 ## Запуск
 
-Продуктивный контур:
+Полный штатный запуск:
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --prod --catalog te21
+```bat
+run-rfm.bat
 ```
 
-Тестовый контур:
+Ручной запуск только Zenith-части по уже опубликованному событию:
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --test --catalog te2
+```bat
+run-zenith-once.bat
 ```
 
-Справка:
+Пример прямого запуска:
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --help
+```bat
+java -cp "rfm-downloader.jar;libs\*" org.ikozmin.rfm.Main --config config\config.json --prod --catalog te21
 ```
 
-Каталог для скачанных файлов задается в `config.json` через `OutputDirectory`.
+## События
 
-## Уведомления
-
-Уведомления по умолчанию выключены.
-
-Email и Telegram включаются отдельно:
-
-```json
-"Notifications": {
-  "Enabled": true,
-  "Email": {
-    "Enabled": true,
-    "SmtpHost": "smtp.your-company.ru",
-    "SmtpPort": 25,
-    "SmtpUsername": "",
-    "SmtpPassword": "",
-    "UseTls": false,
-    "From": "noreply@your-company.ru",
-    "To": ["admin@your-company.ru"],
-    "Subject": "Обновлен перечень Росфинмониторинга",
-    "IncludeAttachment": false,
-    "IncludeFileChecksum": true
-  },
-  "Telegram": {
-    "Enabled": true,
-    "Token": "YOUR_TELEGRAM_BOT_TOKEN",
-    "ChatIds": ["YOUR_TELEGRAM_CHAT_ID"],
-    "ApiIp": "149.154.167.220",
-    "IncludeFileChecksum": true
-  }
-}
-```
-
-Уведомление отправляется только если скачана новая версия файла.
-
-Telegram-токен маскируется в логах. Для подключения к Telegram используется `curl --resolve api.telegram.org:443:<ApiIp>`, чтобы сохранить корректное HTTPS-имя узла при подключении к конкретному IP.
-
-## Retention
-
-Настройки очистки:
-
-```json
-"Retention": {
-  "Enabled": true,
-  "KeepAuditDays": 30,
-  "KeepDownloadedVersions": 10
-}
-```
-
-Очистка удаляет старые audit-файлы и старые версии скачанных файлов для текущего перечня.
-
-## Результаты работы
-
-Рабочая папка:
+События обновления перечня хранятся здесь:
 
 ```text
-downloads/
-  state.properties
-  audit/
-    *.json
+events/registry-updated/
+  new/
+  processing/
+  processed/
+  failed/
+  results/
 ```
 
-Скачанные файлы сохраняются в `OutputDirectory`, внутри папки с датой перечня.
+Поле `registryFile` в событии должно указывать на XML-файл, который загружается в Zenith. Для TE/MVK ZIP-файлов `rfm-downloader` сначала распаковывает XML и только потом публикует событие.
 
-Пример:
+Результат Zenith сохраняется здесь:
 
 ```text
-downloads/
-  260622/
-    suspect_20260622_<id>.zip
-    *.xml
+events/registry-updated/results/<eventId>-zenith-summary.json
 ```
 
-`state.properties` хранит последний известный `idXml`, путь к файлу, дату загрузки и checksum.
+## Обработка в Zenith
 
-## Эксплуатация по расписанию
+`zenith-processor` выполняет следующие этапы:
 
-Рекомендуется:
+1. Загружает XML в `/zenith-object/api/v1/opercontrol/person_lists`.
+2. Запускает массовую проверку ПОД/ФТ.
+3. Формирует отчет с `outDocType=10217`.
+4. Скачивает отчет в формате `Xlsx`.
+5. Анализирует лист `Таблица_Проверок`.
+6. Ищет совпадения по признаку списка террористов в `ЗЛ_РискОснования`.
+7. Убирает повторы по ключу: нормализованное ФИО + номер счета.
+8. Сравнивает найденных лиц с `data/zenith-found-persons.tsv`.
+9. Для новых лиц готовит черновики ФЭС.
+10. Сохраняет summary для итогового уведомления.
 
-- запускать один раз в час;
-- использовать постоянную рабочую папку;
-- не запускать несколько экземпляров одновременно;
-- контролировать exit code;
-- проверять `logs/rfm-client.log`.
+Локальная база найденных лиц пока остается TSV:
 
-## Получение продуктивного доступа
+```text
+data/zenith-found-persons.tsv
+```
 
-Общий порядок:
+H2 сейчас не используется намеренно. Он понадобится позже, когда появятся ручные статусы согласования, отправка ФЭС, квитанции и история решений.
 
-1. Запросить доступ к тестовым методам через Личный кабинет.
-2. Выполнить тестовые методы.
-3. Сохранить JSON-конверты.
-4. Заполнить заявку на продуктивный доступ.
-5. Упаковать заявку и JSON-конверты в ZIP.
-6. Отправить архив в поддержку.
+## Черновики ФЭС
 
-Конверт метода `authenticate` прикладывать не требуется.
+Черновики сохраняются здесь:
+
+```text
+downloads/fes-packages/<дата-проверки>/<ключ-лица>/
+```
+
+В каждом каталоге сейчас создаются:
+
+```text
+FM03_DRAFT_<ключ-лица>.xml
+FM03_DRAFT_<ключ-лица>.xml.sig
+```
+
+Файл `.sig` пока является заглушкой. Реальная detached-подпись CryptoPro и отправка через `formalized-message/send` относятся к следующим этапам.
+
+Текущий рабочий статус:
+
+```text
+FOUND -> DRAFT_PREPARED -> REVIEW_REQUIRED
+```
+
+В будущем могут появиться:
+
+```text
+APPROVED -> SENT -> TICKET_RECEIVED
+REJECTED
+```
+
+## Единое уведомление
+
+Уведомление отправляется один раз после завершения всех включенных модулей.
+
+В уведомление входят:
+
+1. Блок РФМ: перечень, `idXml`, путь к XML, checksum.
+2. Блок Zenith:
+   - новых лиц не найдено; или
+   - список новых лиц и пути к черновикам ФЭС.
+3. Напоминание, что автоматическая отправка в Росфинмониторинг не выполнялась.
+
+Контракты уведомлений находятся в `common`:
+
+```text
+org.ikozmin.common.notification.NotificationMessage
+org.ikozmin.common.notification.NotificationSender
+```
+
+Реализации находятся в `rfm-downloader`:
+
+```text
+EmailNotificationService
+TelegramNotificationService
+NotificationService
+UnifiedNotificationTextBuilder
+```
+
+Для Telegram используется `curl.exe --resolve api.telegram.org:443:<ApiIp>`, чтобы HTTPS-сертификат проверялся по имени `api.telegram.org`, но подключение шло к заданному IP.
+
+## Текущее ограничение
+
+После загрузки перечня в Zenith API возвращает HTTP 200 без тела ответа. Проект пока не разбирает лог Zenith и не показывает, сколько записей было добавлено, изменено или удалено при импорте. Следующим улучшением стоит проверить endpoint Zenith log/export и использовать его, если он возвращает надежные счетчики.
+
+## Сборка
+
+Из корня Maven-проекта:
+
+```bat
+mvn -q clean package
+```
+
+Корень проекта:
+
+```text
+G:\tmp\fedfsm\java
+```
+
+## Эксплуатационные заметки
+
+- Запускайте только один экземпляр одновременно.
+- Рекомендуемый режим: один раз в час.
+- Папки `config/`, `downloads/`, `events/`, `data/`, `logs/` должны находиться на постоянном диске.
+- Если Zenith не обработал событие, проверьте `events/registry-updated/failed`.
+- Результат Zenith можно проверить в `events/registry-updated/results`.
+- Черновики ФЭС нужно проверять вручную перед любым будущим этапом отправки.
