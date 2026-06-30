@@ -182,6 +182,7 @@ __screenshots__/
 
 .gigacode/
 
+*.iml
 *.json
 !*.template.json
 *.cer

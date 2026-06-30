@@ -68,6 +68,7 @@ public final class RegistryUpdateService {
                     currentState.getIdXml(),
                     remoteIdXml,
                     currentFile,
+                    currentFile,
                     currentState.getSha256(),
                     safeFileSize(currentFile),
                     currentState.getDownloadedAt()
@@ -82,8 +83,10 @@ public final class RegistryUpdateService {
         Path savedFile = downloadAndMoveAtomically(catalogType, remoteCatalog, downloadRequestId);
         registryFileValidator.validate(catalogType, savedFile);
 
+        Path registryFile = savedFile;
+
         if (catalogType != CatalogType.UN && catalogType != CatalogType.UN_RUS) {
-            unzipFile(savedFile);
+            registryFile = unzipSingleXmlFile(savedFile);
         }
 
         String sha256 = Sha256.ofFile(savedFile);
@@ -109,6 +112,7 @@ public final class RegistryUpdateService {
                 catalogType,
                 oldIdXml,
                 remoteIdXml,
+                registryFile,
                 savedFile,
                 sha256,
                 fileSize,
@@ -164,9 +168,10 @@ public final class RegistryUpdateService {
         return safeDate.length() >= 8 ? safeDate.substring(2, 8) : safeDate;
     }
 
-    private void unzipFile(Path zipFile) {
+    private Path unzipSingleXmlFile(Path zipFile) {
         try {
             Path parentDir = zipFile.getParent();
+            Path extractedXml = null;
 
             try (ZipInputStream zipInputStream = new ZipInputStream(
                     Files.newInputStream(zipFile),
@@ -183,13 +188,28 @@ public final class RegistryUpdateService {
                     Files.copy(zipInputStream, targetFile, StandardCopyOption.REPLACE_EXISTING);
 
                     log.info("Extracted registry file: {}", targetFile.toAbsolutePath());
+
+                    if (targetFile.getFileName().toString().toLowerCase().endsWith(".xml")) {
+                        if (extractedXml != null) {
+                            throw new IllegalStateException("ZIP contains more than one XML file: " + zipFile.toAbsolutePath());
+                        }
+                        extractedXml = targetFile;
+                    }
                     zipInputStream.closeEntry();
                 }
-
-                log.info("ZIP file extracted successfully: {}", zipFile.toAbsolutePath());
             }
+
+            if (extractedXml == null) {
+                throw new IllegalStateException("ZIP contains no XML file: " + zipFile.toAbsolutePath());
+            }
+
+            log.info("ZIP file extracted successfully. zip={}, xml={}",
+                    zipFile.toAbsolutePath(),
+                    extractedXml.toAbsolutePath());
+
+            return extractedXml;
         } catch (Exception e) {
-            log.error("Failed to unzip file: {}", zipFile.toAbsolutePath(), e);
+            throw new IllegalStateException("Failed to unzip registry XML: " + zipFile.toAbsolutePath(), e);
         }
     }
 

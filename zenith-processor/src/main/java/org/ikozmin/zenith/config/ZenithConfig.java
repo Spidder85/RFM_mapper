@@ -11,12 +11,19 @@ public final class ZenithConfig {
     @JsonProperty("Zenith")
     private Zenith zenith;
 
+    @JsonProperty("Results")
+    private Results results;
+
     public Events getEvents() {
-        return events;
+        return events == null ? new Events() : events;
     }
 
     public Zenith getZenith() {
         return zenith;
+    }
+
+    public Results getResults() {
+        return results == null ? new Results() : results;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -54,6 +61,9 @@ public final class ZenithConfig {
         @JsonProperty("Report")
         private Report report;
 
+        @JsonProperty("Fes")
+        private Fes fes;
+
         public String getBaseUrl() {
             return baseUrl;
         }
@@ -81,6 +91,10 @@ public final class ZenithConfig {
 
         public Report getReport() {
             return report;
+        }
+
+        public Fes getFes() {
+            return fes == null ? new Fes() : fes;
         }
     }
 
@@ -143,6 +157,30 @@ public final class ZenithConfig {
         public String getOutputDirectory() {
             return outputDirectory == null || outputDirectory.isBlank()
                     ? "downloads/zenith-reports"
+                    : outputDirectory;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static final class Results {
+        @JsonProperty("Directory")
+        private String directory;
+
+        public String getDirectory() {
+            return directory == null || directory.isBlank()
+                    ? "events/registry-updated/results"
+                    : directory;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static final class Fes {
+        @JsonProperty("OutputDirectory")
+        private String outputDirectory;
+
+        public String getOutputDirectory() {
+            return outputDirectory == null || outputDirectory.isBlank()
+                    ? "downloads/fes-packages"
                     : outputDirectory;
         }
     }

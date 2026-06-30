@@ -14,12 +14,15 @@ import org.ikozmin.rfm.event.RegistryEventService;
 import org.ikozmin.rfm.logging.Masking;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.Contour;
-import org.ikozmin.rfm.service.NotificationService;
-import org.ikozmin.rfm.service.RegistryUpdateService;
-import org.ikozmin.rfm.service.RetentionService;
-import org.ikozmin.rfm.service.UpdateResult;
+import org.ikozmin.rfm.service.*;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.ikozmin.rfm.trigger.ZenithProcessorTrigger;
+import org.ikozmin.common.event.ProcessingSummaryStore;
+import org.ikozmin.common.event.ZenithProcessingSummary;
+import org.ikozmin.common.notification.NotificationMessage;
+import org.ikozmin.rfm.event.PublishedRegistryEvent;
+
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -41,7 +44,7 @@ public final class Main implements Callable<Integer> {
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
     @Option(names = {"-c", "--config"}, description = "Path to config.json")
-    private Path configPath = Path.of("..", "config.json");
+    private Path configPath = Path.of("config", "config.json");
 
     @Option(names = {"-k", "--catalog"}, description = "Catalog: te2, te21, mvk, un, un-rus")
     private String catalog;
@@ -146,11 +149,11 @@ public final class Main implements Callable<Integer> {
                     result.sha256(),
                     result.fileSize());
 
-            sendNotificationIfNeeded(config, result);
+            PublishedRegistryEvent event = publishRegistryEvent(config, result);
+            runZenithProcessorIfNeeded(config, event.file());
 
-            Path eventFile = publishRegistryEvent(config, result);
-            runZenithProcessorIfNeeded(config, eventFile);
-
+            Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(config, event.eventId());
+            sendNotificationIfNeeded(config, result, zenithSummary.orElse(null));
             System.out.println("UPDATED " + result.file().toAbsolutePath());
         } else {
             log.info("Update result: no updates. catalog={}, idXml={}, file={}",
@@ -168,18 +171,20 @@ public final class Main implements Callable<Integer> {
         applyRetentionIfNeeded(config, workDir, downloadDir, catalogType);
     }
 
-    private Path publishRegistryEvent(AppConfig config, UpdateResult result) {
+    private PublishedRegistryEvent publishRegistryEvent(AppConfig config, UpdateResult result) {
         Path eventRootDir = Path.of(config.getEvents() == null
                 ? "events/registry-updated"
                 : config.getEvents().getDirectory()
         );
 
         RegistryEventService eventService = new RegistryEventService(eventRootDir);
-        Path eventFile = eventService.publish(result);
+        PublishedRegistryEvent publishedEvent = eventService.publish(result);
 
-        log.info("Registry update event published: {}", eventFile.toAbsolutePath());
+        log.info("Registry update event published: eventId={}, file={}",
+                publishedEvent.eventId(),
+                publishedEvent.file().toAbsolutePath());
 
-        return eventFile;
+        return publishedEvent;
     }
 
     private void runZenithProcessorIfNeeded(AppConfig config, Path eventFile) {
@@ -205,20 +210,29 @@ public final class Main implements Callable<Integer> {
         return Path.of(value.trim());
     }
 
-    private void sendNotificationIfNeeded(AppConfig config, UpdateResult result) {
+    private void sendNotificationIfNeeded(AppConfig config, UpdateResult result, ZenithProcessingSummary zenithSummary) {
         NotificationService notificationService = new NotificationService(config.getNotifications());
 
         if (!notificationService.isEnabled()) {
             return;
         }
 
-        notificationService.sendUpdateNotification(
-                result.catalogType().getCode(),
-                result.idXml(),
-                result.file(),
-                result.sha256(),
-                result.oldIdXml()
-        );
+        try {
+            UnifiedNotificationTextBuilder builder = new UnifiedNotificationTextBuilder();
+
+            NotificationMessage message = builder.build(
+                    result.catalogType().getCode(),
+                    result.idXml(),
+                    result.oldIdXml(),
+                    result.file(),
+                    result.sha256(),
+                    zenithSummary
+            );
+
+            notificationService.send(message);
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to build or send notification", e);
+        }
     }
 
     private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, CatalogType catalogType) {
@@ -229,6 +243,17 @@ public final class Main implements Callable<Integer> {
         }
 
         retentionService.apply(workDir, downloadDir, catalogType);
+    }
+
+    private Optional<ZenithProcessingSummary> loadZenithSummary(AppConfig config, String eventId) {
+        Path eventRootDir = Path.of(config.getEvents() == null
+                ? "events/registry-updated"
+                : config.getEvents().getDirectory()
+        );
+
+        Path summaryDir = eventRootDir.resolve("results");
+
+        return new ProcessingSummaryStore(summaryDir).load(eventId);
     }
 
     private Contour resolveContour(AppConfig config) {

@@ -7,7 +7,8 @@
     <parent>
         <groupId>org.ikozmin</groupId>
         <artifactId>rfm-automation-parent</artifactId>
-        <version>2.1.0</version>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>rfm-downloader</artifactId>
@@ -147,26 +148,6 @@
     <build>
         <finalName>rfm-downloader</finalName>
         <plugins>
-            <!-- Copy runtime dependencies to target/libs -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-dependency-plugin</artifactId>
-                <version>3.6.1</version>
-                <executions>
-                    <execution>
-                        <id>copy-dependencies</id>
-                        <phase>prepare-package</phase>
-                        <goals>
-                            <goal>copy-dependencies</goal>
-                        </goals>
-                        <configuration>
-                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
-                            <includeScope>compile</includeScope>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
             <!-- Build a thin JAR with classpath in the manifest -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

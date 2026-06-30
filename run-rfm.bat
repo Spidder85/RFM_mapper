@@ -12,7 +12,7 @@ set PATH=C:\Program Files\Crypto Pro\CSP;%JAVA_HOME%\bin;%PATH%
   -Djavax.net.ssl.trustStoreType=Windows-ROOT ^
   -cp "rfm-downloader.jar;libs\*" ^
   org.ikozmin.rfm.Main ^
-  --config config.json ^
+  --config config\config.json ^
   --prod ^
   --catalog te21
 

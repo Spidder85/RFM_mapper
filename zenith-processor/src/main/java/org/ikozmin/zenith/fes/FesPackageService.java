@@ -12,16 +12,21 @@ import java.util.List;
 import java.util.Locale;
 
 public final class FesPackageService {
-    private static final Path OUTPUT_DIR = Path.of("downloads", "fes-packages");
     private static final DateTimeFormatter DATE = DateTimeFormatter.BASIC_ISO_DATE;
+
+    private final Path outputDir;
+
+    public FesPackageService(Path outputDir) {
+        this.outputDir = outputDir;
+    }
 
     public List<FesPackage> preparePackages(List<ZenithReportPerson> persons, ZenithReportResult reportResult) {
         try {
             List<FesPackage> result = new ArrayList<>();
 
-            for (ZenithReportPerson  person : persons) {
+            for (ZenithReportPerson person : persons) {
                 String safeName = safeFileName(person.personKey());
-                Path dir = OUTPUT_DIR
+                Path dir = outputDir
                         .resolve(reportResult.endDate().format(DATE))
                         .resolve(safeName);
 
