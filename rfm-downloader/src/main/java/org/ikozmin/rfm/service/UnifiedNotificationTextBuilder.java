@@ -17,6 +17,7 @@ public final class UnifiedNotificationTextBuilder {
             String checksum,
             ZenithProcessingSummary zenithSummary
     ) throws Exception {
+        String indent = "    ";
         String subject = "Обновлен перечень Росфинмониторинга: " + displayCatalogName(catalogType);
         StringBuilder body = new StringBuilder();
 
@@ -27,41 +28,41 @@ public final class UnifiedNotificationTextBuilder {
         body.append(System.lineSeparator());
 
         body.append("1. Загрузка перечня").append(System.lineSeparator());
-        body.append("Перечень: ").append(displayCatalogName(catalogType)).append(System.lineSeparator());
-        body.append("Дата загрузки: ").append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))).append(System.lineSeparator());
-        body.append("Предыдущий idXml: ").append(oldIdXml == null ? "отсутствует" : oldIdXml).append(System.lineSeparator());
-        body.append("Новый idXml: ").append(idXml).append(System.lineSeparator());
+        body.append(indent).append("Перечень: ").append(displayCatalogName(catalogType)).append(System.lineSeparator());
+        body.append(indent).append("Дата загрузки: ").append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss"))).append(System.lineSeparator());
+        body.append(indent).append("Предыдущий idXml: ").append(oldIdXml == null ? "отсутствует" : oldIdXml).append(System.lineSeparator());
+        body.append(indent).append("Новый idXml: ").append(idXml).append(System.lineSeparator());
 
         if (filePath != null) {
-            body.append("Файл для обработки: ").append(filePath.toAbsolutePath()).append(System.lineSeparator());
+            body.append(indent).append("Файл для обработки: ").append(filePath.toAbsolutePath()).append(System.lineSeparator());
 
             if (Files.exists(filePath)) {
-                body.append("Размер файла: ").append(Files.size(filePath)).append(" байт").append(System.lineSeparator());
+                body.append(indent).append("Размер файла: ").append(formatFileSize(Files.size(filePath))).append(System.lineSeparator());
             }
         }
 
         if (checksum != null && !checksum.isBlank()) {
-            body.append("SHA-256 архива: ").append(checksum).append(System.lineSeparator());
+            body.append(indent).append("SHA-256 архива: ").append(checksum).append(System.lineSeparator());
         }
 
         body.append(System.lineSeparator());
         body.append("2. Проверка в Zenith").append(System.lineSeparator());
 
         if (zenithSummary == null) {
-            body.append("Результат Zenith недоступен. Проверьте журнал zenith-processor.").append(System.lineSeparator());
+            body.append(indent).append("Результат Zenith недоступен. Проверьте журнал zenith-processor.").append(System.lineSeparator());
         } else if (zenithSummary.newPersons() == 0) {
-            body.append("Новых лиц не найдено.").append(System.lineSeparator());
-            body.append("Всего совпадений в отчете: ").append(zenithSummary.totalPersons()).append(System.lineSeparator());
+            body.append(indent).append("Новых лиц не найдено.").append(System.lineSeparator());
+            body.append(indent).append("Всего совпадений в отчете: ").append(zenithSummary.totalPersons()).append(System.lineSeparator());
         } else {
-            body.append("Найдены новые лица: ").append(zenithSummary.newPersons()).append(System.lineSeparator());
+            body.append(indent).append("Найдены новые лица: ").append(zenithSummary.newPersons()).append(System.lineSeparator());
             body.append(System.lineSeparator());
 
             int index = 1;
             for (ZenithProcessingSummary.Person person : zenithSummary.persons()) {
-                body.append(index++).append(". ").append(person.displayName()).append(System.lineSeparator());
-                body.append("   Номер счета: ").append(blankToDash(person.accountNumber())).append(System.lineSeparator());
-                body.append("   Организация: ").append(blankToDash(person.emitentName())).append(System.lineSeparator());
-                body.append("   Черновики ФЭС: ").append(person.packageDirectory()).append(System.lineSeparator());
+                body.append(indent).append(index++).append(". ").append(person.displayName()).append(System.lineSeparator());
+                body.append(indent).append(indent).append("Номер счета: ").append(blankToDash(person.accountNumber())).append(System.lineSeparator());
+                body.append(indent).append(indent).append("Организация: ").append(blankToDash(person.emitentName())).append(System.lineSeparator());
+                body.append(indent).append(indent).append("Черновики ФЭС: ").append(person.packageDirectory()).append(System.lineSeparator());
                 body.append(System.lineSeparator());
             }
 
@@ -70,9 +71,16 @@ public final class UnifiedNotificationTextBuilder {
         }
 
         body.append(System.lineSeparator());
-        body.append("Это автоматическое уведомление.").append(System.lineSeparator());
+        body.append("Это автоматическое уведомление. Не надо на него отвечать").append(System.lineSeparator());
 
         return new NotificationMessage(subject, body.toString());
+    }
+
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " байт";
+        if (size < 1024 * 1024) return String.format("%.2f KБайт", size / 1024.0);
+        if (size < 1024 * 1024 * 1024) return String.format("%.2f MБайт", size / (1024.0 * 1024));
+        return String.format("%.2f ГБайт", size / (1024.0 * 1024 * 1024));
     }
 
     private String displayCatalogName(String catalogType) {
