@@ -49,7 +49,8 @@ public final class UnifiedNotificationTextBuilder {
         body.append("2. Проверка в Zenith").append(System.lineSeparator());
 
         if (zenithSummary == null) {
-            body.append(indent).append("Результат Zenith недоступен. Проверьте журнал zenith-processor.").append(System.lineSeparator());
+            body.append(indent).append("Zenith не вернул файл результата обработки.").append(System.lineSeparator());
+            body.append(indent).append("Проверьте logs/zenith-processor.log и каталог events/registry-updated.").append(System.lineSeparator());
         } else if (zenithSummary.newPersons() == 0) {
             body.append(indent).append("Новых лиц не найдено.").append(System.lineSeparator());
             body.append(indent).append("Всего совпадений в отчете: ").append(zenithSummary.totalPersons()).append(System.lineSeparator());
