@@ -30,6 +30,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     @Option(names = "--once", description = "Process one event and exit")
     private boolean once;
 
+    @Option(names = "--require-event", description = "Fail if no event is available")
+    private boolean requireEvent;
+
     public static void main(String[] args) {
         int exitCode = new CommandLine(new ZenithProcessorMain()).execute(args);
         System.exit(exitCode);
@@ -46,6 +49,11 @@ public final class ZenithProcessorMain implements Callable<Integer> {
             Optional<FileEventConsumer.ClaimedEvent> claimedEvent = consumer.claimNext();
 
             if (claimedEvent.isEmpty()) {
+                if (requireEvent) {
+                    log.error("No registry update events found, but event is required");
+                    System.err.println("No registry update events found, but event is required");
+                    return 3;
+                }
                 log.info("No registry update events found");
                 return 0;
             }
