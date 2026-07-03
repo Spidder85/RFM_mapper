@@ -11,6 +11,9 @@ public final class ZenithTriggerConfig {
     @JsonProperty("Command")
     private String command;
 
+    @JsonProperty("WorkingDirectory")
+    private String workingDirectory;
+
     @JsonProperty("TimeoutSeconds")
     private Integer timeoutSeconds;
 
@@ -20,6 +23,12 @@ public final class ZenithTriggerConfig {
 
     public String getCommand() {
         return command;
+    }
+
+    public String getWorkingDirectory() {
+        return workingDirectory == null || workingDirectory.isBlank()
+                ? "."
+                : workingDirectory;
     }
 
     public Integer getTimeoutSeconds() {
