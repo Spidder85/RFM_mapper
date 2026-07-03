@@ -43,6 +43,7 @@
                         <configuration>
                             <outputDirectory>${project.build.directory}/libs</outputDirectory>
                             <includeScope>runtime</includeScope>
+                            <excludeArtifactIds>rfm-downloader,zenith-processor</excludeArtifactIds>
                         </configuration>
                     </execution>
                 </executions>

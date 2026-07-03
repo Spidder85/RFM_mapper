@@ -33,6 +33,14 @@
         </fileSet>
 
         <fileSet>
+            <directory>${project.parent.basedir}/rfm-downloader/libs</directory>
+            <outputDirectory>libs</outputDirectory>
+            <includes>
+                <include>*.jar</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
             <directory>${project.parent.basedir}/rfm-downloader</directory>
             <outputDirectory>config</outputDirectory>
             <includes>
