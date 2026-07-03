@@ -33,6 +33,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     @Option(names = "--require-event", description = "Fail if no event is available")
     private boolean requireEvent;
 
+    @Option(names = "--retry-failed", description = "Move one failed event back to new queue before processing")
+    private boolean retryFailed;
+
     public static void main(String[] args) {
         int exitCode = new CommandLine(new ZenithProcessorMain()).execute(args);
         System.exit(exitCode);
@@ -44,6 +47,18 @@ public final class ZenithProcessorMain implements Callable<Integer> {
             ZenithConfig config = new ZenithConfigLoader().load(configPath);
 
             FileEventConsumer consumer = new FileEventConsumer(Path.of(config.getEvents().getDirectory()));
+
+            if (retryFailed) {
+                Optional<Path> requeued = consumer.requeueOldestFailed();
+
+                if (requeued.isEmpty()) {
+                    log.info("No failed registry update events found");
+                    return 0;
+                }
+
+                log.info("Failed event requeued: {}", requeued.get().toAbsolutePath());
+            }
+
             ZenithWorkflowService workflowService = new ZenithWorkflowService(config);
 
             Optional<FileEventConsumer.ClaimedEvent> claimedEvent = consumer.claimNext();

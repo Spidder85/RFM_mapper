@@ -74,4 +74,32 @@ public final class FileEventConsumer {
 
     public record ClaimedEvent(RegistryUpdatedEvent event, Path file) {
     }
+
+    public Optional<Path> requeueOldestFailed() {
+        try {
+            Files.createDirectories(newDir);
+            Files.createDirectories(failedDir);
+
+            try (Stream<Path> files = Files.list(failedDir)) {
+                Optional<Path> next = files
+                        .filter(Files::isRegularFile)
+                        .filter(path -> path.getFileName().toString().endsWith(".json"))
+                        .sorted(Comparator.comparing(Path::getFileName))
+                        .findFirst();
+
+                if (next.isEmpty()) {
+                    return Optional.empty();
+                }
+
+                Path source = next.get();
+                Path target = newDir.resolve(source.getFileName());
+
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+
+                return Optional.of(target);
+            }
+        } catch (Exception e) { {
+            throw new IllegalStateException("Failed to requeue failed event", e);
+        }}
+    }
 }
