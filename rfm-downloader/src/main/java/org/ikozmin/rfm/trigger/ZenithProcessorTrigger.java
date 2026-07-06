@@ -4,9 +4,8 @@ import org.ikozmin.rfm.config.ZenithTriggerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 public final class ZenithProcessorTrigger {
@@ -32,11 +31,22 @@ public final class ZenithProcessorTrigger {
         }
 
         try {
-            List<String> command = parseCommand(config.getCommand());
+            Path workingDirectory = resolveWorkingDirectory(config.getWorkingDirectory());
 
-            log.info("Starting zenith processor. command={}", command);
+            //List<String> command = parseCommand(config.getCommand());
 
-            Process process = new ProcessBuilder(command)
+            log.info("Starting zenith processor. workingDirectory={}, command={}",
+                    workingDirectory,
+                    config.getCommand());
+
+
+            Process process = new ProcessBuilder(
+                    "cmd.exe",
+                    "/d",
+                    "/c",
+                    config.getCommand()
+            )
+                    .directory(workingDirectory.toFile())
                     .inheritIO()
                     .start();
 
@@ -44,7 +54,8 @@ public final class ZenithProcessorTrigger {
 
             if (!finished) {
                 process.destroyForcibly();
-                throw new IllegalStateException("Zenith processor timeout: " + Duration.ofSeconds(config.getTimeoutSeconds()));
+                throw new IllegalStateException("Zenith processor timeout: "
+                        + Duration.ofSeconds(config.getTimeoutSeconds()));
             }
 
             if (process.exitValue() != 0) {
@@ -57,16 +68,32 @@ public final class ZenithProcessorTrigger {
         }
     }
 
-    private List<String> parseCommand(String commandLine) {
-        String[] parts = commandLine.trim().split("\\s+");
-        List<String> result = new ArrayList<>();
+    private Path resolveWorkingDirectory(String value) {
+        Path path = Path.of(value);
 
-        for (String part : parts) {
-            if (!part.isBlank()) {
-                result.add(part);
-            }
+        if (path.isAbsolute()) {
+            return path.normalize();
         }
 
-        return result;
+        String appHome = System.getProperty("app.home");
+
+        if (appHome != null && !appHome.isBlank()) {
+            return Path.of(appHome).resolve(path).normalize();
+        }
+
+        return Path.of(System.getProperty("user.dir")).resolve(path).normalize();
     }
+
+//    private List<String> parseCommand(String commandLine) {
+//        String[] parts = commandLine.trim().split("\\s+");
+//        List<String> result = new ArrayList<>();
+//
+//        for (String part : parts) {
+//            if (!part.isBlank()) {
+//                result.add(part);
+//            }
+//        }
+//
+//        return result;
+//    }
 }

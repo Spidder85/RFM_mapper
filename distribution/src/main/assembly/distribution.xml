@@ -33,6 +33,14 @@
         </fileSet>
 
         <fileSet>
+            <directory>${project.parent.basedir}/rfm-downloader/libs</directory>
+            <outputDirectory>libs</outputDirectory>
+            <includes>
+                <include>*.jar</include>
+            </includes>
+        </fileSet>
+
+        <fileSet>
             <directory>${project.parent.basedir}/rfm-downloader</directory>
             <outputDirectory>config</outputDirectory>
             <includes>
@@ -62,6 +70,7 @@
             <includes>
                 <include>run-rfm.bat</include>
                 <include>run-zenith-once.bat</include>
+                <include>run-zenith-retry-failed.bat</include>
             </includes>
         </fileSet>
     </fileSets>

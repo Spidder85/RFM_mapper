@@ -16,7 +16,7 @@ if not exist "%JAVA_HOME%\bin\java.exe" (
   -cp "zenith-processor.jar;libs\*" ^
   org.ikozmin.zenith.ZenithProcessorMain ^
   --config config\zenith-config.json ^
-  --once ^
-  %*
+  --retry-failed ^
+  --once
 
 exit /b %ERRORLEVEL%

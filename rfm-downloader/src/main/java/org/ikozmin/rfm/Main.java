@@ -243,6 +243,13 @@ public final class Main implements Callable<Integer> {
         }
 
         retentionService.apply(workDir, downloadDir, catalogType);
+
+        Path eventRootDir = Path.of(config.getEvents() == null
+                ? "events/registry-updated"
+                : config.getEvents().getDirectory()
+        );
+
+        new EventRetentionService(config.getRetention()).apply(eventRootDir);
     }
 
     private Optional<ZenithProcessingSummary> loadZenithSummary(AppConfig config, String eventId) {
