@@ -20,7 +20,7 @@ public final class ZenithReportService {
     private static final long ALL_EMITENTS = -1L;
     private static final String REPORT_FORMAT = "Xlsx";
 
-    //private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter.xml");
+    //private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter-te21.xml");
     private static final Path STATE_FILE = Path.of("downloads", "zenith-state.properties");
 
     private final ZenithStateStore stateStore;

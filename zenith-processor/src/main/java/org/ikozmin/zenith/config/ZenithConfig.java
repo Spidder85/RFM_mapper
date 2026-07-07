@@ -259,7 +259,7 @@ public final class ZenithConfig {
 
         public String getFilterTemplatePath() {
             return filterTemplatePath == null || filterTemplatePath.isBlank()
-                    ? "config/zenith/podft-report-filter.xml"
+                    ? "config/zenith/podft-report-filter-te21.xml"
                     : filterTemplatePath;
         }
 

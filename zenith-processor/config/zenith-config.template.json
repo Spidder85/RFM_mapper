@@ -1,0 +1,69 @@
+{
+  "Events": { // TODO п. 3
+    "RegistryUpdatedDirectory": "events/registry-updated",
+    "ImportCompletedDirectories": [
+      "events/zenith-imported/client-main"
+    ],
+    "CheckDirectory": "events/zenith-imported/client-main"
+  },
+  "Results": {
+    "Directory": "events/registry-updated/results"
+  },
+  "Workflow": {
+    "Mode": "FULL",
+    "PollIntervalSeconds": 60 // в чем назначение?
+  },
+  // зачем пользователю знать и указывать нахождение БД это его не касается
+//  "Storage": {
+//    "FoundPersonsFile": "data/zenith-found-persons.tsv"
+//  },
+  "Zenith": {
+    "BaseUrl": "https://zenith-server/zenith-object",
+    "UserName": "ZENITH_USER",
+    "Password": "ZENITH_PASSWORD",
+    "ServerName": "",
+
+    "Import": {
+      "Enabled": true,
+// см TODO п. 2
+      //      "FileFormat": "TerroristsXml",
+//      "Append": false
+    },
+
+    "MassCheck": {
+      "Enabled": true,
+      "Periodic": false // в чем смысл? массовая проверка должна осуществляться при запуске программы если было обновление
+    },
+
+    "Reports": {  // возможно стоит упростить
+      "te21": {
+        "Enabled": true,
+        "OutDocType": 10217,
+        "Filter": true,
+        "FilterTemplatePath": "config/zenith/podft-report-filter-te21.xml",
+        "OutputDirectory": "downloads/zenith-reports/te21",
+        "FileNamePrefix": "T38_terr"
+      },
+      "un": {
+        "Enabled": true,
+        "OutDocType": 10217,
+        "Filter": true,
+        "FilterTemplatePath": "config/zenith/podft-report-filter-un.xml",
+        "OutputDirectory": "downloads/zenith-reports/un",
+        "FileNamePrefix": "T38_un"
+      },
+      "mvk": {
+        "Enabled": true,
+        "OutDocType": 10217,
+        "Filter": true,
+        "FilterTemplatePath": "config/zenith/podft-report-filter-mvk.xml",
+        "OutputDirectory": "downloads/zenith-reports/mvk",
+        "FileNamePrefix": "T38_mvk"
+      }
+    },
+
+    "Fes": {
+      "OutputDirectory": "downloads/fes-packages"
+    }
+  }
+}
