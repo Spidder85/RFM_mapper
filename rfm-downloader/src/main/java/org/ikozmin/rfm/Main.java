@@ -22,6 +22,8 @@ import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.common.notification.NotificationMessage;
 import org.ikozmin.rfm.event.PublishedRegistryEvent;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,16 +89,14 @@ public final class Main implements Callable<Integer> {
         Files.createDirectories(downloadDir);
 
         Contour contour = resolveContour(config);
-        CatalogType catalogType = catalog != null
-            ? CatalogType.from(catalog)
-            : CatalogType.from(configLoader.defaultCatalog(config));
+        List<CatalogType> catalogTypes = resolveCatalogs(config, configLoader);
 
         log.info("Application start");
         log.info("Config path: {}", configPath.toAbsolutePath());
         log.info("Work directory: {}", workDir.toAbsolutePath());
         log.info("Download directory: {}", downloadDir.toAbsolutePath());
         log.info("Contour: {}", contour);
-        log.info("Catalog: {}", catalogType.getCode());
+        log.info("Catalog: {}", catalogTypes.stream().map(CatalogType::getCode).toList());
         log.info("Certificate serial: {}", Masking.serial(configLoader.certificateSerial(config)));
 
         ClientCertificate certificate;
@@ -135,40 +135,47 @@ public final class Main implements Callable<Integer> {
             downloadDir
         );
 
-        UpdateResult result = retryPolicy.execute(
-                "registry-update-" + catalogType.getCode(),
-                () -> updateService.update(catalogType)
-        );
+        List<UpdateResult> results = new ArrayList<>();
 
-        if (result.isDownloaded()) {
-            log.info("Update result: downloaded. catalog={}, oldIdXml={}, newIdXml={}, file={}, sha256={}, fileSize={}",
-                    result.catalogType().getCode(),
-                    Masking.id(result.oldIdXml()),
-                    Masking.id(result.idXml()),
-                    result.file(),
-                    result.sha256(),
-                    result.fileSize());
+        for (CatalogType catalogType : catalogTypes) {
+            UpdateResult result = retryPolicy.execute(
+                    "registry-update-" + catalogType.getCode(),
+                    () -> updateService.update(catalogType)
+            );
 
-            PublishedRegistryEvent event = publishRegistryEvent(config, result);
-            runZenithProcessorIfNeeded(config, event.file());
+            results.add(result);
 
-            Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(config, event.eventId());
-            sendNotificationIfNeeded(config, result, zenithSummary.orElse(null));
-            System.out.println("UPDATED " + result.file().toAbsolutePath());
-        } else {
-            log.info("Update result: no updates. catalog={}, idXml={}, file={}",
-                    result.catalogType().getCode(),
-                    Masking.id(result.idXml()),
-                    result.file());
+            if (result.isDownloaded()) {
+                log.info("Update result: downloaded. catalog={}, oldIdXml={}, newIdXml={}, file={}, sha256={}, fileSize={}",
+                        result.catalogType().getCode(),
+                        Masking.id(result.oldIdXml()),
+                        Masking.id(result.idXml()),
+                        result.file(),
+                        result.sha256(),
+                        result.fileSize());
 
-            System.out.println("NO_UPDATES " + result.catalogType().getCode() + " " + result.idXml());
+                PublishedRegistryEvent event = publishRegistryEvent(config, result);
+                runZenithProcessorIfNeeded(config, event.file());
 
-            if (result.file() != null) {
-                System.out.println("CURRENT_FILE " + result.file().toAbsolutePath());
+                Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(config, event.eventId());
+                sendNotificationIfNeeded(config, result, zenithSummary.orElse(null));
+
+                System.out.println("UPDATED " + result.catalogType().getCode() + " " + result.file().toAbsolutePath());
+            } else {
+                log.info("Update result: no updates. catalog={}, idXml={}, file={}",
+                        result.catalogType().getCode(),
+                        Masking.id(result.idXml()),
+                        result.file());
+
+                System.out.println("NO_UPDATES " + result.catalogType().getCode() + " " + result.idXml());
+
+                if (result.file() != null) {
+                    System.out.println("CURRENT_FILE " + result.catalogType().getCode() + " " + result.file().toAbsolutePath());
+                }
             }
         }
 
-        applyRetentionIfNeeded(config, workDir, downloadDir, catalogType);
+        applyRetentionIfNeeded(config, workDir, downloadDir, catalogTypes);
     }
 
     private PublishedRegistryEvent publishRegistryEvent(AppConfig config, UpdateResult result) {
@@ -235,14 +242,16 @@ public final class Main implements Callable<Integer> {
         }
     }
 
-    private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, CatalogType catalogType) {
+    private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, List<CatalogType> catalogTypes) {
         RetentionService retentionService = new RetentionService(config.getRetention());
 
         if (!retentionService.isEnabled()) {
             return;
         }
 
-        retentionService.apply(workDir, downloadDir, catalogType);
+        for (CatalogType catalogType : catalogTypes) {
+            retentionService.apply(workDir, downloadDir, catalogType);
+        }
 
         Path eventRootDir = Path.of(config.getEvents() == null
                 ? "events/registry-updated"
@@ -261,6 +270,23 @@ public final class Main implements Callable<Integer> {
         Path summaryDir = eventRootDir.resolve("results");
 
         return new ProcessingSummaryStore(summaryDir).load(eventId);
+    }
+
+    private List<CatalogType> resolveCatalogs(AppConfig config, ConfigLoader configLoader) {
+        if (catalog != null && !catalog.isBlank()) {
+            return List.of(CatalogType.from(catalog));
+        }
+
+        if (!config.getCatalogs().isEmpty()) {
+            return config.getCatalogs()
+                    .stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(CatalogType::from)
+                    .distinct()
+                    .toList();
+        }
+
+        return List.of(CatalogType.from(configLoader.defaultCatalog(config)));
     }
 
     private Contour resolveContour(AppConfig config) {

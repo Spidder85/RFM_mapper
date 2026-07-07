@@ -8,6 +8,11 @@
     "UseCryptoPro": true
   },
   "DefaultCatalog": "te21",
+  "Catalogs": [
+    "te21",
+    "un",
+    "mvk"
+  ],
   "UseTestContour": false,
   "OutputDirectory": "downloads",
   "Retention": {

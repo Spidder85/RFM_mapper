@@ -3,6 +3,8 @@ package org.ikozmin.rfm.config;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.List;
+
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class AppConfig {
     @JsonProperty("Credentials")
@@ -16,6 +18,9 @@ public final class AppConfig {
 
     @JsonProperty("DefaultCatalog")
     private String defaultCatalog;
+
+    @JsonProperty("Catalogs")
+    private List<String> catalogs;
 
     @JsonProperty("UseTestContour")
     private boolean useTestContour;
@@ -49,6 +54,10 @@ public final class AppConfig {
 
     public String getDefaultCatalog() {
         return defaultCatalog;
+    }
+
+    public List<String> getCatalogs() {
+        return catalogs;
     }
 
     public boolean isUseTestContour() {
