@@ -34,7 +34,7 @@ public final class ZenithReportService {
     public ZenithReportResult createAndDownloadReport(String eventId, String catalog, String idXml) {
         try {
             LocalDate endDate = LocalDate.now();
-            LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate()
+            LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate(catalog)
                     .orElse(endDate);
 
             String filterXml = config.isFilter() ? loadFilterXml() : null;
@@ -71,7 +71,7 @@ public final class ZenithReportService {
 
             apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
 
-            stateStore.saveSuccessfulCheck(endDate, idXml, eventId);
+            stateStore.saveSuccessfulCheck(catalog, endDate, idXml, eventId);
 
             log.info("Zenith report downloaded. catalog={}, outDocId={}, file={}",
                     catalog,

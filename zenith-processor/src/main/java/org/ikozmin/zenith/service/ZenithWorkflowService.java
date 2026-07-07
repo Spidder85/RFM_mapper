@@ -102,7 +102,7 @@ public final class ZenithWorkflowService {
                 ? "TerroristsXml"
                 : importConfig.getFileFormat();
 
-        boolean append = importConfig != null && importConfig.isAppend()
+        boolean append = importConfig != null && importConfig.isAppend();
 
         apiClient.importPersonList(
                 event.registryFile(),

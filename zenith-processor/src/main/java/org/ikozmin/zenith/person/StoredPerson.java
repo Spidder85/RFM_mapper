@@ -3,6 +3,7 @@ package org.ikozmin.zenith.person;
 import java.time.LocalDate;
 
 public record StoredPerson(
+        String catalog,
         String personKey,
         String displayName,
         String normalizedName,
