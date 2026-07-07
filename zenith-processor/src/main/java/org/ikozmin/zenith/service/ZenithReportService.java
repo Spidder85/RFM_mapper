@@ -1,6 +1,5 @@
 package org.ikozmin.zenith.service;
 
-import org.ikozmin.common.event.RegistryUpdatedEvent;
 import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.slf4j.Logger;
@@ -15,12 +14,10 @@ import java.time.format.DateTimeFormatter;
 public final class ZenithReportService {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportService.class);
 
-    //private static final int PODFT_REPORT_OUT_DOC_TYPE = 10217;
     private static final boolean ASSIGN_OUT_DOC_NUM = false;
     private static final long ALL_EMITENTS = -1L;
     private static final String REPORT_FORMAT = "Xlsx";
 
-    //private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter-te21.xml");
     private static final Path STATE_FILE = Path.of("downloads", "zenith-state.properties");
 
     private final ZenithStateStore stateStore;
@@ -34,9 +31,9 @@ public final class ZenithReportService {
         this.stateStore = new ZenithStateStore(STATE_FILE);
     }
 
-    public ZenithReportResult createAndDownloadReport(RegistryUpdatedEvent event) {
+    public ZenithReportResult createAndDownloadReport(String eventId, String catalog, String idXml) {
         try {
-            LocalDate endDate = resolveCurrentCheckDate(event);
+            LocalDate endDate = LocalDate.now();
             LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate()
                     .orElse(endDate);
 
@@ -61,21 +58,23 @@ public final class ZenithReportService {
             Files.createDirectories(outputDir);
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy_MM_dd");
-            String fileName = "T38_"
+            String fileName = config.getFileNamePrefix()
+                    + "_"
                     + beginDate.format(formatter)
                     + "-"
                     + endDate.format(formatter)
-                    + "_терр"
-                    //+ event.idXml()
+                    + "_"
+                    + catalog
                     + ".xlsx";
 
             Path targetFile = outputDir.resolve(fileName);
 
             apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
 
-            stateStore.saveSuccessfulCheck(endDate, event.idXml(), event.eventId());
+            stateStore.saveSuccessfulCheck(endDate, idXml, eventId);
 
-            log.info("Zenith report downloaded. outDocId={}, file={}",
+            log.info("Zenith report downloaded. catalog={}, outDocId={}, file={}",
+                    catalog,
                     outDoc.id(),
                     targetFile.toAbsolutePath());
 
@@ -94,13 +93,5 @@ public final class ZenithReportService {
         }
 
         return Files.readString(filterPath);
-    }
-
-    private LocalDate resolveCurrentCheckDate(RegistryUpdatedEvent event) {
-        if (event.downloadedAt() == null || event.downloadedAt().isBlank()) {
-            return LocalDate.now();
-        }
-
-        return LocalDate.parse(event.downloadedAt().substring(0, 10));
     }
 }
