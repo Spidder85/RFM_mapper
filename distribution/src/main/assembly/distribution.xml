@@ -64,6 +64,8 @@
                 <include>run-rfm.bat</include>
                 <include>run-zenith-once.bat</include>
                 <include>run-zenith-retry-failed.bat</include>
+                <include>run-zenith-watch.bat</include>
+                <include>run-zenith-drain.bat</include>
             </includes>
         </fileSet>
     </fileSets>
