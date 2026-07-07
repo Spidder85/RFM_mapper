@@ -98,8 +98,8 @@ public final class FileEventConsumer {
 
                 return Optional.of(target);
             }
-        } catch (Exception e) { {
+        } catch (Exception e) {
             throw new IllegalStateException("Failed to requeue failed event", e);
-        }}
+        }
     }
 }
