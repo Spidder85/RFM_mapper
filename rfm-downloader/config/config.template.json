@@ -55,7 +55,7 @@
   },
   "ZenithTrigger": {
     "Enabled": true,
-    "Command": "run-zenith-once.bat --require-event",
+    "Command": "run-zenith-once.bat --require-event --mode FULL",
     "WorkingDirectory": ".",
     "TimeoutSeconds": 1800
   }
