@@ -12,7 +12,6 @@ if not exist "%JAVA_HOME%\bin\java.exe" (
 )
 
 "%JAVA_HOME%\bin\java.exe" ^
-  @REM -Dapp.home="%APP_HOME%" ^
   -cp "zenith-processor.jar;libs\*" ^
   org.ikozmin.zenith.ZenithProcessorMain ^
   --config config\zenith-config.json ^
