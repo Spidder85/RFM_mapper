@@ -196,4 +196,4 @@ target/
 # пакпка событий
 events/
 /data/
-config/
+/config/
