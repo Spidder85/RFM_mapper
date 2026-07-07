@@ -98,8 +98,8 @@ public final class ZenithConfig {
         @JsonProperty("PollIntervalSeconds")
         private Integer pollIntervalSeconds;
 
-        public String getMode() {
-            return mode;
+        public ZenithWorkflowMode getMode() {
+            return ZenithWorkflowMode.from(mode);
         }
 
         public int getPollIntervalSeconds() {
