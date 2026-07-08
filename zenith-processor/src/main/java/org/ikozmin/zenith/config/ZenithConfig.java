@@ -84,9 +84,7 @@ public final class ZenithConfig {
         }
 
         public String getDirectory() {
-            return directory == null || directory.isBlank()
-                    ? "events/registry-updated"
-                    : directory;
+            return getRegistryUpdatedDirectory();
         }
     }
 
@@ -166,8 +164,8 @@ public final class ZenithConfig {
         }
 
         public Report getReport(String catalog) {
-            if (report != null && catalog != null) {
-                Report reportByCatalog = reports.get(catalog.toLowerCase());
+            if (reports != null && catalog != null && !catalog.isBlank()) {
+                Report reportByCatalog = reports.get(catalog.trim().toLowerCase());
 
                 if (reportByCatalog != null) {
                     return reportByCatalog;
@@ -187,24 +185,19 @@ public final class ZenithConfig {
         @JsonProperty("Enabled")
         private Boolean enabled;
 
-        @JsonProperty("FileFormat")
-        private String fileFormat;
-
-        @JsonProperty("Append")
-        private Boolean append;
+        @JsonProperty("ListCategories")
+        private Map<String, String> listCategories;
 
         public boolean isEnabled() {
             return enabled == null || enabled;
         }
 
-        public String getFileFormat() {
-            return fileFormat == null || fileFormat.isBlank()
-                    ? "TerroristsXml"
-                    : fileFormat;
-        }
+        public String getListCategory(String catalog) {
+            if (listCategories == null || catalog == null || catalog.isBlank()) {
+                return null;
+            }
 
-        public boolean isAppend() {
-            return append != null && append;
+            return listCategories.get(catalog.trim().toLowerCase());
         }
     }
 
@@ -213,15 +206,8 @@ public final class ZenithConfig {
         @JsonProperty("Enabled")
         private Boolean enabled;
 
-        @JsonProperty("Periodic")
-        private Boolean periodic;
-
         public boolean isEnabled() {
             return enabled == null || enabled;
-        }
-
-        public boolean isPeriodic() {
-            return periodic != null && periodic;
         }
     }
 
