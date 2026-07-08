@@ -1,5 +1,5 @@
 {
-  "Events": { // TODO п. 3
+  "Events": {
     "RegistryUpdatedDirectory": "events/registry-updated",
     "ImportCompletedDirectories": [
       "events/zenith-imported/client-main"
@@ -10,13 +10,8 @@
     "Directory": "events/registry-updated/results"
   },
   "Workflow": {
-    "Mode": "FULL",
-    "PollIntervalSeconds": 60 // в чем назначение?
+    "Mode": "FULL"
   },
-  // зачем пользователю знать и указывать нахождение БД это его не касается
-//  "Storage": {
-//    "FoundPersonsFile": "data/zenith-found-persons.tsv"
-//  },
   "Zenith": {
     "BaseUrl": "https://zenith-server/zenith-object",
     "UserName": "ZENITH_USER",
@@ -25,17 +20,17 @@
 
     "Import": {
       "Enabled": true,
-// см TODO п. 2
-      //      "FileFormat": "TerroristsXml",
-//      "Append": false
+      "ListCategories": {
+        "un": "PUT_ZENITH_UN_LIST_CATEGORY_HERE",
+        "mvk": "PUT_ZENITH_MVK_LIST_CATEGORY_HERE"
+      }
     },
 
     "MassCheck": {
-      "Enabled": true,
-      "Periodic": false // в чем смысл? массовая проверка должна осуществляться при запуске программы если было обновление
+      "Enabled": true
     },
 
-    "Reports": {  // возможно стоит упростить
+    "Reports": {
       "te21": {
         "Enabled": true,
         "OutDocType": 10217,
