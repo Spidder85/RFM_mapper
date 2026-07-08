@@ -26,15 +26,23 @@ public final class ZenithApiClient {
                 .build();
     }
 
-    public void importPersonList(Path file, String fileFormat, boolean append) {
+    public void importPersonList(Path file, String fileFormat, String listCategory, boolean append) {
         try {
             if (file == null || !Files.isRegularFile(file)) {
                 throw new IllegalArgumentException("Person list file not found: " + file);
             }
 
-            URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists"
-                    + "?file_format=" + encode(fileFormat)
-                    + "&append=" + append);
+            StringBuilder query = new StringBuilder()
+                    .append("?file_format=")
+                    .append(encode(fileFormat))
+                    .append("&append=")
+                    .append(append);
+
+            if (listCategory != null && !listCategory.isBlank()) {
+                query.append("&list_category=").append(encode(listCategory));
+            }
+
+            URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists" + query);
 
             HttpRequest request = base(uri)
                     .header("Content-Type", "application/octet-stream")
