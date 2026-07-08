@@ -14,7 +14,14 @@
     "mvk"
   ],
   "UseTestContour": false,
-  "OutputDirectory": "downloads",
+  "OutputDirectory": {
+    "Path": "\\\\t-cent\\Zen-co\\terrlist\\test\\",
+    "Catalogs": {
+      "te21": "терр_экстр",
+      "un": "Санкционные_списки_ООН",
+      "mvk": "Перечни_решМКО(МВК)"
+    }
+  },
   "Retention": {
     "Enabled": true,
     "KeepAuditDays": 60,

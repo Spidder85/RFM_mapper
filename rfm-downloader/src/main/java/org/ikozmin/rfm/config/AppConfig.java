@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class AppConfig {
@@ -29,7 +30,7 @@ public final class AppConfig {
     private NotificationsConfig notifications;
 
     @JsonProperty("OutputDirectory")
-    private String outputDirectory;
+    private OutputConfig output;
 
     @JsonProperty("Retention")
     private RetentionConfig retention;
@@ -68,8 +69,8 @@ public final class AppConfig {
         return notifications;
     }
 
-    public String getOutputDirectory() {
-        return outputDirectory;
+    public OutputConfig getOutputDirectory() {
+        return output;
     }
 
     public RetentionConfig getRetention() {
@@ -82,6 +83,23 @@ public final class AppConfig {
 
     public ZenithTriggerConfig getZenithTrigger() {
         return zenithTrigger;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static final class OutputConfig {
+        @JsonProperty("Path")
+        private String path;
+
+        @JsonProperty("Catalogs")
+        private Map<String, String> catalogs;
+
+        public String getPath() {
+            return path;
+        }
+
+        public Map<String, String> getCatalogs() {
+            return catalogs;
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

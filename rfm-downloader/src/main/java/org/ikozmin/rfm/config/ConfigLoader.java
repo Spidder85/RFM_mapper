@@ -28,6 +28,7 @@ public final class ConfigLoader {
             log.info("Config userName: {}", Masking.userName(userName(config)));
             log.info("Config certificate serial: {}", Masking.serial(certificateSerial(config)));
             log.info("Config default catalog: {}", defaultCatalog(config));
+            // TODO: добавить перечень передаваемых катаогов, не только тот что по умолчанию
             log.info("Config contour: {}", config.isUseTestContour() ? "test" : "prod");
 
             return config;

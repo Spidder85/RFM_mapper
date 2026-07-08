@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -29,17 +30,20 @@ public final class RegistryUpdateService {
     private final Path downloadDir;
     private final DownloadRequestIdResolver downloadRequestIdResolver;
     private final RegistryFileValidator registryFileValidator;
+    private final Map<String, String> catalogFolderMapping;
 
     public RegistryUpdateService(
         RfmClient apiClient,
         RegistryStateStore stateStore,
         Path workDir,
-        Path downloadDir
+        Path downloadDir,
+        Map<String, String> catalogFolderMapping
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
         this.workDir = workDir;
         this.downloadDir = downloadDir;
+        this.catalogFolderMapping = catalogFolderMapping;
         this.downloadRequestIdResolver = new DownloadRequestIdResolver();
         this.registryFileValidator = new RegistryFileValidator();
     }
@@ -128,7 +132,12 @@ public final class RegistryUpdateService {
         try {
             Files.createDirectories(workDir);
 
-            Path dateDir = downloadDir.resolve(resolveDateFolder(catalogInfo));
+            String folderName = catalogFolderMapping.get(catalogType.getCode());
+            if (folderName == null || folderName.isBlank()) {
+                folderName = catalogType.getCode();
+            }
+            Path catalogDir = downloadDir.resolve(folderName);
+            Path dateDir = catalogDir.resolve(resolveDateFolder(catalogInfo));
             Files.createDirectories(dateDir);
 
             Path finalFile = dateDir.resolve(buildFileName(catalogType, catalogInfo));

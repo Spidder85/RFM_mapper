@@ -24,6 +24,7 @@ import org.ikozmin.rfm.event.PublishedRegistryEvent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +89,16 @@ public final class Main implements Callable<Integer> {
         Path downloadDir = resolveDownloadDir(config);
         Files.createDirectories(downloadDir);
 
+        Map<String, String> catalogMapping = config.getOutputDirectory().getCatalogs();
+
+        for (Map.Entry<String, String> entry : catalogMapping.entrySet()) {
+            //String catalog = entry.getKey();
+            String folderName = entry.getValue();
+            if (folderName != null && !folderName.isBlank()) {
+                Files.createDirectories(downloadDir.resolve(folderName));
+            }
+        }
+
         Contour contour = resolveContour(config);
         List<CatalogType> catalogTypes = resolveCatalogs(config, configLoader);
 
@@ -132,7 +143,8 @@ public final class Main implements Callable<Integer> {
             apiClient,
             new RegistryStateStore(workDir.resolve("state.properties")),
             workDir,
-            downloadDir
+            downloadDir,
+            catalogMapping
         );
 
         List<UpdateResult> results = new ArrayList<>();
@@ -207,7 +219,7 @@ public final class Main implements Callable<Integer> {
     }
 
     private Path resolveDownloadDir(AppConfig config) {
-        String value = config.getOutputDirectory();
+        String value = config.getOutputDirectory().getPath();
 
         if (value == null || value.trim().isEmpty()) {
             log.warn("OutputDirectory is not configured, using default: downloads");
