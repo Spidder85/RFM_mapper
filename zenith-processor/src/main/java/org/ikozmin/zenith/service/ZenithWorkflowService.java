@@ -24,10 +24,12 @@ public final class ZenithWorkflowService {
 
     private final ZenithConfig config;
     private final ZenithApiClient apiClient;
+    private final ZenithImportFormatResolver importFormatResolver;
 
     public ZenithWorkflowService(ZenithConfig config) {
         this.config = config;
         this.apiClient = new ZenithApiClient(config.getZenith());
+        this.importFormatResolver = new ZenithImportFormatResolver();
     }
 
     public ZenithProcessingSummary processFull(RegistryUpdatedEvent event) {
@@ -38,6 +40,9 @@ public final class ZenithWorkflowService {
 
         importPersonListIfEnabled(event);
         runMassCheckIfEnabled(event.catalog());
+
+        // возможно лишнее, но на всякий случай ставлю генерацию сообытия
+        //new ZenithImportEventPublisher(config.getEvents()).publish(event);
 
         ZenithProcessingSummary summary = createReportIfEnabled(
                 event.eventId(),
@@ -98,21 +103,23 @@ public final class ZenithWorkflowService {
             return;
         }
 
-        String fileFormat = importConfig == null
-                ? "TerroristsXml"
-                : importConfig.getFileFormat();
-
-        boolean append = importConfig != null && importConfig.isAppend();
+        ZenithImportFormatResolver.ImportFormat importFormat = importFormatResolver.resolve(
+                event.catalog(),
+                importConfig
+        );
 
         apiClient.importPersonList(
                 event.registryFile(),
-                fileFormat,
-                append
+                importFormat.fileFormat(),
+                importFormat.listCategory(),
+                false
         );
 
-        log.info("Registry list imported into Zenith. eventId={}, catalog={}, file={}",
+        log.info("Registry list imported into Zenith. eventId={}, catalog={}, fileFormat={}, listCategory={}, file={}",
                 event.eventId(),
                 event.catalog(),
+                importFormat.fileFormat(),
+                importFormat.listCategory() == null ? "<not required>" : importFormat.listCategory(),
                 event.registryFile());
     }
 
@@ -124,13 +131,9 @@ public final class ZenithWorkflowService {
             return;
         }
 
-        boolean periodic = massCheck != null && massCheck.isPeriodic();
+        apiClient.runMassCheck(false);
 
-        apiClient.runMassCheck(periodic);
-
-        log.info("Zenith AML/CFT mass check started. catalog={}, periodic={}",
-                catalog,
-                periodic);
+        log.info("Zenith AML/CFT mass check started. catalog={}, periodic=false", catalog);
     }
 
     private ZenithProcessingSummary createReportIfEnabled(String eventId, String catalog, String idXml) {
@@ -160,7 +163,7 @@ public final class ZenithWorkflowService {
         }
 
         FoundPersonsStore personsStore = new FoundPersonsStore(
-                Path.of("data", "zenith-found-persons.tsv")
+                Path.of(config.getStorage().getFoundPersonsFile())
         );
 
         List<ZenithReportPerson> newPersons = personsStore.findNewPersons(
