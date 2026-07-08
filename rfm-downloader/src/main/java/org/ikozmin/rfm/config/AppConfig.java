@@ -57,7 +57,7 @@ public final class AppConfig {
     }
 
     public List<String> getCatalogs() {
-        return catalogs;
+        return catalogs == null ? List.of() : catalogs;
     }
 
     public boolean isUseTestContour() {
