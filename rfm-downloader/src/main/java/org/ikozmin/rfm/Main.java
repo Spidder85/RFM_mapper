@@ -1,5 +1,8 @@
 package org.ikozmin.rfm;
 
+import org.ikozmin.common.event.ProcessingSummaryStore;
+import org.ikozmin.common.event.ZenithProcessingSummary;
+import org.ikozmin.common.notification.NotificationMessage;
 import org.ikozmin.rfm.audit.AuditWriter;
 import org.ikozmin.rfm.cert.CertificateLoader;
 import org.ikozmin.rfm.cert.ClientCertificate;
@@ -10,22 +13,20 @@ import org.ikozmin.rfm.client.RfmEndpoints;
 import org.ikozmin.rfm.client.RfmHttpClientFactory;
 import org.ikozmin.rfm.config.AppConfig;
 import org.ikozmin.rfm.config.ConfigLoader;
+import org.ikozmin.rfm.event.PublishedRegistryEvent;
 import org.ikozmin.rfm.event.RegistryEventService;
 import org.ikozmin.rfm.logging.Masking;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.Contour;
-import org.ikozmin.rfm.service.*;
+import org.ikozmin.rfm.service.EventRetentionService;
+import org.ikozmin.rfm.service.NotificationService;
+import org.ikozmin.rfm.service.RegistryNotificationItem;
+import org.ikozmin.rfm.service.RegistryUpdateService;
+import org.ikozmin.rfm.service.RetentionService;
+import org.ikozmin.rfm.service.UnifiedNotificationTextBuilder;
+import org.ikozmin.rfm.service.UpdateResult;
 import org.ikozmin.rfm.storage.RegistryStateStore;
 import org.ikozmin.rfm.trigger.ZenithProcessorTrigger;
-import org.ikozmin.common.event.ProcessingSummaryStore;
-import org.ikozmin.common.event.ZenithProcessingSummary;
-import org.ikozmin.common.notification.NotificationMessage;
-import org.ikozmin.rfm.event.PublishedRegistryEvent;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -36,6 +37,10 @@ import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.Callable;
 
 @Command(
@@ -90,14 +95,7 @@ public final class Main implements Callable<Integer> {
         Files.createDirectories(downloadDir);
 
         Map<String, String> catalogMapping = config.getOutputDirectory().getCatalogs();
-
-        for (Map.Entry<String, String> entry : catalogMapping.entrySet()) {
-            //String catalog = entry.getKey();
-            String folderName = entry.getValue();
-            if (folderName != null && !folderName.isBlank()) {
-                Files.createDirectories(downloadDir.resolve(folderName));
-            }
-        }
+        createCatalogDirectories(downloadDir, catalogMapping);
 
         Contour contour = resolveContour(config);
         List<CatalogType> catalogTypes = resolveCatalogs(config, configLoader);
@@ -107,7 +105,7 @@ public final class Main implements Callable<Integer> {
         log.info("Work directory: {}", workDir.toAbsolutePath());
         log.info("Download directory: {}", downloadDir.toAbsolutePath());
         log.info("Contour: {}", contour);
-        log.info("Catalog: {}", catalogTypes.stream().map(CatalogType::getCode).toList());
+        log.info("Catalogs: {}", catalogTypes.stream().map(CatalogType::getCode).toList());
         log.info("Certificate serial: {}", Masking.serial(configLoader.certificateSerial(config)));
 
         ClientCertificate certificate;
@@ -147,15 +145,13 @@ public final class Main implements Callable<Integer> {
             catalogMapping
         );
 
-        List<UpdateResult> results = new ArrayList<>();
+        List<RegistryNotificationItem> notificationItems = new ArrayList<>();
 
         for (CatalogType catalogType : catalogTypes) {
             UpdateResult result = retryPolicy.execute(
                     "registry-update-" + catalogType.getCode(),
                     () -> updateService.update(catalogType)
             );
-
-            results.add(result);
 
             if (result.isDownloaded()) {
                 log.info("Update result: downloaded. catalog={}, oldIdXml={}, newIdXml={}, file={}, sha256={}, fileSize={}",
@@ -170,7 +166,7 @@ public final class Main implements Callable<Integer> {
                 runZenithProcessorIfNeeded(config, event.file());
 
                 Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(config, event.eventId());
-                sendNotificationIfNeeded(config, result, zenithSummary.orElse(null));
+                notificationItems.add(new RegistryNotificationItem(result, zenithSummary.orElse(null)));
 
                 System.out.println("UPDATED " + result.catalogType().getCode() + " " + result.file().toAbsolutePath());
             } else {
@@ -187,6 +183,7 @@ public final class Main implements Callable<Integer> {
             }
         }
 
+        sendNotificationIfNeeded(config, notificationItems);
         applyRetentionIfNeeded(config, workDir, downloadDir, catalogTypes);
     }
 
@@ -219,17 +216,39 @@ public final class Main implements Callable<Integer> {
     }
 
     private Path resolveDownloadDir(AppConfig config) {
-        String value = config.getOutputDirectory().getPath();
+        AppConfig.OutputConfig output = config.getOutputDirectory();
 
-        if (value == null || value.trim().isEmpty()) {
-            log.warn("OutputDirectory is not configured, using default: downloads");
+        if (output == null || output.getPath() == null || output.getPath().trim().isEmpty()) {
+            log.warn("OutputDirectory.Path is not configured, using default: downloads");
             return Path.of("downloads");
         }
 
-        return Path.of(value.trim());
+        return Path.of(output.getPath().trim());
     }
 
-    private void sendNotificationIfNeeded(AppConfig config, UpdateResult result, ZenithProcessingSummary zenithSummary) {
+    private Map<String, String> resolveCatalogFolderMapping(AppConfig config) {
+        AppConfig.OutputConfig output = config.getOutputDirectory();
+
+        if (output == null || output.getCatalogs() == null) {
+            return Map.of();
+        }
+
+        return output.getCatalogs();
+    }
+
+    private void createCatalogDirectories(Path downloadDir, Map<String, String> catalogMapping) throws Exception {
+        for (String folderName : catalogMapping.values()) {
+            if (folderName != null && !folderName.isBlank()) {
+                Files.createDirectories(downloadDir.resolve(folderName));
+            }
+        }
+    }
+
+    private void sendNotificationIfNeeded(AppConfig config, List<RegistryNotificationItem> notificationItems) {
+        if (notificationItems == null || notificationItems.isEmpty()) {
+            return;
+        }
+
         NotificationService notificationService = new NotificationService(config.getNotifications());
 
         if (!notificationService.isEnabled()) {
@@ -238,16 +257,7 @@ public final class Main implements Callable<Integer> {
 
         try {
             UnifiedNotificationTextBuilder builder = new UnifiedNotificationTextBuilder();
-
-            NotificationMessage message = builder.build(
-                    result.catalogType().getCode(),
-                    result.idXml(),
-                    result.oldIdXml(),
-                    result.file(),
-                    result.sha256(),
-                    zenithSummary
-            );
-
+            NotificationMessage message = builder.build(notificationItems);
             notificationService.send(message);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to build or send notification", e);
