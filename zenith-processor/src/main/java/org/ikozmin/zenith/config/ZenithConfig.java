@@ -2,6 +2,7 @@ package org.ikozmin.zenith.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.ikozmin.common.notification.NotificationsConfig;
 
 import java.util.List;
 import java.util.Map;
@@ -23,6 +24,9 @@ public final class ZenithConfig {
     @JsonProperty("Storage")
     private Storage storage;
 
+    @JsonProperty("Notifications")
+    private NotificationsConfig notifications;
+
     public Events getEvents() {
         return events == null ? new Events() : events;
     }
@@ -41,6 +45,10 @@ public final class ZenithConfig {
 
     public Storage getStorage() {
         return storage == null ? new Storage() : storage;
+    }
+
+    public NotificationsConfig getNotifications() {
+        return notifications;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
