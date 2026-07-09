@@ -129,9 +129,10 @@ public final class ZenithWorkflowService {
             return;
         }
 
+        log.info("Zenith AML/CFT mass check started. catalog={}, periodic=false", catalog);
         apiClient.runMassCheck(false);
 
-        log.info("Zenith AML/CFT mass check started. catalog={}, periodic=false", catalog);
+        log.info("Zenith AML/CFT mass check finished. catalog={}, periodic=false", catalog);
     }
 
     private ZenithProcessingSummary createReportIfEnabled(String eventId, String catalog, String idXml) {
