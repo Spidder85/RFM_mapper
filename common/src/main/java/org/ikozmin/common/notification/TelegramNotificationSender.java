@@ -1,21 +1,18 @@
-package org.ikozmin.rfm.service;
+package org.ikozmin.common.notification;
 
-import org.ikozmin.common.notification.NotificationMessage;
-import org.ikozmin.common.notification.NotificationSender;
-import org.ikozmin.rfm.config.TelegramConfig;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 
-public final class TelegramNotificationService implements NotificationSender {
-    private static final Logger log = LoggerFactory.getLogger(TelegramNotificationService.class);
+public final class TelegramNotificationSender implements NotificationSender {
+    private static final Logger log = LoggerFactory.getLogger(TelegramNotificationSender.class);
     private static final String DEFAULT_TELEGRAM_API_IP = "149.154.167.220";
 
     private final TelegramConfig config;
 
-    public TelegramNotificationService(TelegramConfig config) {
+    public TelegramNotificationSender(TelegramConfig config) {
         this.config = config;
     }
 
@@ -29,7 +26,6 @@ public final class TelegramNotificationService implements NotificationSender {
         if (!isEnabled()) {
             return;
         }
-
         try {
             validate();
 

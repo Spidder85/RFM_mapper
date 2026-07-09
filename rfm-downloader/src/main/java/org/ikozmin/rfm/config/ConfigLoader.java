@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.ikozmin.rfm.exception.RfmConfigException;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 
 import java.io.IOException;
 import java.nio.file.Files;

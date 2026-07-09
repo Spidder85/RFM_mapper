@@ -1,4 +1,4 @@
-package org.ikozmin.rfm.service;
+package org.ikozmin.common.notification;
 
 import jakarta.mail.Authenticator;
 import jakarta.mail.Message;
@@ -10,9 +10,6 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
-import org.ikozmin.common.notification.NotificationMessage;
-import org.ikozmin.common.notification.NotificationSender;
-import org.ikozmin.rfm.config.EmailConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,12 +18,12 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
 
-public final class EmailNotificationService implements NotificationSender {
-    private static final Logger log = LoggerFactory.getLogger(EmailNotificationService.class);
+public final class EmailNotificationSender implements NotificationSender {
+    private static final Logger log = LoggerFactory.getLogger(EmailNotificationSender.class);
 
     private final EmailConfig config;
 
-    public EmailNotificationService(EmailConfig config) {
+    public EmailNotificationSender(EmailConfig config) {
         this.config = config;
     }
 

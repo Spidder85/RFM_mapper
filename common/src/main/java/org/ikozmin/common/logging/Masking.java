@@ -1,4 +1,4 @@
-package org.ikozmin.rfm.logging;
+package org.ikozmin.common.logging;
 
 public final class Masking {
     private Masking() {}

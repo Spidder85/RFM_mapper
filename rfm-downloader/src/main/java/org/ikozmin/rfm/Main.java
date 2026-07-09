@@ -15,11 +15,11 @@ import org.ikozmin.rfm.config.AppConfig;
 import org.ikozmin.rfm.config.ConfigLoader;
 import org.ikozmin.rfm.event.PublishedRegistryEvent;
 import org.ikozmin.rfm.event.RegistryEventService;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.Contour;
 import org.ikozmin.rfm.service.EventRetentionService;
-import org.ikozmin.rfm.service.NotificationService;
+import org.ikozmin.common.notification.NotificationDispatcher;
 import org.ikozmin.rfm.service.RegistryNotificationItem;
 import org.ikozmin.rfm.service.RegistryUpdateService;
 import org.ikozmin.rfm.service.RetentionService;
@@ -249,7 +249,7 @@ public final class Main implements Callable<Integer> {
             return;
         }
 
-        NotificationService notificationService = new NotificationService(config.getNotifications());
+        NotificationDispatcher notificationService = new NotificationDispatcher(config.getNotifications());
 
         if (!notificationService.isEnabled()) {
             return;

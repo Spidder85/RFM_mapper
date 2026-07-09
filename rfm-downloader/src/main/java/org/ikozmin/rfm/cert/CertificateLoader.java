@@ -7,7 +7,7 @@ import java.util.Enumeration;
 import java.util.Locale;
 
 import org.ikozmin.rfm.exception.RfmCertificateException;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

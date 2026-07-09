@@ -1,7 +1,7 @@
 package org.ikozmin.rfm.service;
 
 import org.ikozmin.rfm.client.RfmClient;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.DownloadedFile;
