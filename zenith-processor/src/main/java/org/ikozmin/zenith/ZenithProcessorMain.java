@@ -4,9 +4,12 @@ import org.ikozmin.common.event.FileEventConsumer;
 import org.ikozmin.common.event.ProcessingSummaryStore;
 import org.ikozmin.common.event.ZenithImportCompletedEventConsumer;
 import org.ikozmin.common.event.ZenithProcessingSummary;
+import org.ikozmin.common.notification.NotificationDispatcher;
+import org.ikozmin.common.notification.NotificationMessage;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.config.ZenithWorkflowMode;
+import org.ikozmin.zenith.notification.ZenithNotificationTextBuilder;
 import org.ikozmin.zenith.service.ZenithWorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -159,6 +162,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                     : workflowService.processFull(claimedEvent.get().event());
 
             saveSummary(config, summary);
+            if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+                sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
+            }
             consumer.markProcessed(claimedEvent.get());
 
             return 0;
@@ -183,6 +189,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         try {
             ZenithProcessingSummary summary = workflowService.processCheckOnly(claimedEvent.get().event());
             saveSummary(config, summary);
+            sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
             consumer.markProcessed(claimedEvent.get());
 
             return 0;
@@ -219,5 +226,16 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
 
         return config.getWorkflow().getMode();
+    }
+
+    private void sendNotificationIfNeeded(ZenithConfig config, String catalog, ZenithProcessingSummary summary) {
+        NotificationDispatcher dispatcher = new NotificationDispatcher(config.getNotifications());
+
+        if (!dispatcher.isEnabled()) {
+            return;
+        }
+
+        NotificationMessage message = new ZenithNotificationTextBuilder().build(catalog, summary);
+        dispatcher.send(message);
     }
 }

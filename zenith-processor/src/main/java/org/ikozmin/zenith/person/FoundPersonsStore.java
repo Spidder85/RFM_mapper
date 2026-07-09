@@ -14,6 +14,7 @@ import java.util.Map;
 
 public final class FoundPersonsStore {
     private static final String HEADER = "catalog\tpersonKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";
+    private static final String HEADER_LEGACY = "personKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";
 
     private final Path file;
 
@@ -31,7 +32,7 @@ public final class FoundPersonsStore {
             Map<String, StoredPerson> result = new LinkedHashMap<>();
 
             for (String line : lines) {
-                if (line.isBlank() || line.equals(HEADER)) {
+                if (line.isBlank() || line.equals(HEADER) || line.equals(HEADER_LEGACY)) {
                     continue;
                 }
 
