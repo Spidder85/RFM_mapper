@@ -2,6 +2,8 @@ package org.ikozmin.rfm.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.ikozmin.common.notification.NotificationsConfig;
+
 
 import java.util.List;
 import java.util.Map;
