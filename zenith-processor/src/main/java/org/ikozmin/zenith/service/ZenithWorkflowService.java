@@ -39,10 +39,8 @@ public final class ZenithWorkflowService {
                 event.registryFile());
 
         importPersonListIfEnabled(event);
+        new ZenithImportEventPublisher(config.getEvents()).publish(event);
         runMassCheckIfEnabled(event.catalog());
-
-        // возможно лишнее, но на всякий случай ставлю генерацию сообытия
-        //new ZenithImportEventPublisher(config.getEvents()).publish(event);
 
         ZenithProcessingSummary summary = createReportIfEnabled(
                 event.eventId(),
