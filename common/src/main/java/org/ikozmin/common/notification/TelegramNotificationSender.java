@@ -6,6 +6,9 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Отправляет уведомления в Telegram через bot API.
+ */
 public final class TelegramNotificationSender implements NotificationSender {
     private static final Logger log = LoggerFactory.getLogger(TelegramNotificationSender.class);
     private static final String DEFAULT_TELEGRAM_API_IP = "149.154.167.220";
@@ -22,6 +25,9 @@ public final class TelegramNotificationSender implements NotificationSender {
     }
 
     @Override
+    /**
+     * Отправляет сообщение во все chatId из конфигурации.
+     */
     public void send(NotificationMessage message) {
         if (!isEnabled()) {
             return;

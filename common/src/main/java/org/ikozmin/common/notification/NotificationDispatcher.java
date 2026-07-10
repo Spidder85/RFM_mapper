@@ -5,6 +5,9 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
+/**
+ * Единая точка отправки уведомлений во все включенные каналы.
+ */
 public final class NotificationDispatcher {
     private static final Logger log = LoggerFactory.getLogger(NotificationDispatcher.class);
 
@@ -28,6 +31,9 @@ public final class NotificationDispatcher {
         return config != null && config.isEnabled();
     }
 
+    /**
+     * Передает сообщение каждому включенному sender-у.
+     */
     public void send(NotificationMessage message) {
         if (!isEnabled()) {
             return;

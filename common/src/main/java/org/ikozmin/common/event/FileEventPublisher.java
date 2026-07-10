@@ -6,6 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
+/**
+ * Публикует события в файловую очередь, создавая JSON-файл в подпапке new.
+ */
 public final class FileEventPublisher {
     private final Path newDir;
 
@@ -17,6 +20,9 @@ public final class FileEventPublisher {
         return publish(event.eventId(), event);
     }
 
+    /**
+     * Сохраняет событие завершенного импорта Zenith для офисной проверки.
+     */
     public Path publish(ZenithImportCompletedEvent event) {
         return publish(event.eventId(), event);
     }

@@ -9,6 +9,9 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * Читает файловую очередь событий RegistryUpdated и переводит события между состояниями.
+ */
 public final class FileEventConsumer {
     private final Path newDir;
     private final Path processingDir;
@@ -22,6 +25,9 @@ public final class FileEventConsumer {
         this.failedDir = rootDir.resolve("failed");
     }
 
+    /**
+     * Забирает самое старое новое событие и атомарно переносит его в processing.
+     */
     public Optional<ClaimedEvent> claimNext() {
         try {
             Files.createDirectories(newDir);
@@ -55,10 +61,16 @@ public final class FileEventConsumer {
         }
     }
 
+    /**
+     * Помечает событие успешно обработанным.
+     */
     public void markProcessed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), processedDir.resolve(claimedEvent.file().getFileName()));
     }
 
+    /**
+     * Помечает событие ошибочным для ручного разбора или повторной обработки.
+     */
     public void markFailed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), failedDir.resolve(claimedEvent.file().getFileName()));
     }
@@ -75,6 +87,9 @@ public final class FileEventConsumer {
     public record ClaimedEvent(RegistryUpdatedEvent event, Path file) {
     }
 
+    /**
+     * Возвращает самое старое failed-событие обратно в очередь new.
+     */
     public Optional<Path> requeueOldestFailed() {
         try {
             Files.createDirectories(newDir);

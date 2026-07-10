@@ -18,6 +18,9 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
 
+/**
+ * Отправляет уведомления по email через SMTP.
+ */
 public final class EmailNotificationSender implements NotificationSender {
     private static final Logger log = LoggerFactory.getLogger(EmailNotificationSender.class);
 
@@ -33,6 +36,9 @@ public final class EmailNotificationSender implements NotificationSender {
     }
 
     @Override
+    /**
+     * Отправляет письмо всем получателям из конфигурации.
+     */
     public void send(NotificationMessage message) {
         if (!isEnabled()) {
             return;

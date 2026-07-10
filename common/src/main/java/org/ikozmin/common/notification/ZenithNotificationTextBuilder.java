@@ -4,7 +4,13 @@ import org.ikozmin.common.event.ZenithProcessingSummary;
 
 import java.nio.file.Path;
 
+/**
+ * Формирует человекочитаемый текст результатов Zenith для standalone и RFM-уведомлений.
+ */
 public final class ZenithNotificationTextBuilder {
+    /**
+     * Собирает отдельное уведомление, когда Zenith запускается автономно.
+     */
     public NotificationMessage buildStandalone(String catalog, ZenithProcessingSummary summary) {
         String subject = "Результат проверки Zenith: " + displayCatalogName(catalog);
         String lineSeparator = System.lineSeparator();
@@ -26,6 +32,9 @@ public final class ZenithNotificationTextBuilder {
         return new NotificationMessage(subject, body.toString());
     }
 
+    /**
+     * Добавляет Zenith-блок внутрь общего уведомления RFM.
+     */
     public void appendEmbeddedBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
         body.append(System.lineSeparator());
         body.append(indent).append("Проверка в Zenith").append(System.lineSeparator());

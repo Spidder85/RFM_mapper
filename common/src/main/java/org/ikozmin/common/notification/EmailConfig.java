@@ -6,6 +6,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/**
+ * Настройки SMTP-уведомлений из config.json.
+ */
 public final class EmailConfig {
     @JsonProperty("Enabled")
     private boolean enabled;

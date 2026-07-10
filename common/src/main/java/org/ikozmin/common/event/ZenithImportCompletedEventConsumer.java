@@ -9,6 +9,9 @@ import java.util.Comparator;
 import java.util.Optional;
 import java.util.stream.Stream;
 
+/**
+ * Читает файловую очередь событий ZenithImportCompleted для офисной проверки.
+ */
 public final class ZenithImportCompletedEventConsumer {
     private final Path newDir;
     private final Path processingDir;
@@ -22,6 +25,9 @@ public final class ZenithImportCompletedEventConsumer {
         this.failedDir = rootDir.resolve("failed");
     }
 
+    /**
+     * Забирает следующее событие офисной очереди и переносит его в processing.
+     */
     public Optional<ClaimedEvent> claimNext() {
         try {
             Files.createDirectories(newDir);
@@ -55,10 +61,16 @@ public final class ZenithImportCompletedEventConsumer {
         }
     }
 
+    /**
+     * Помечает офисное событие успешно обработанным.
+     */
     public void markProcessed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), processedDir.resolve(claimedEvent.file().getFileName()));
     }
 
+    /**
+     * Помечает офисное событие ошибочным для последующего разбора.
+     */
     public void markFailed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), failedDir.resolve(claimedEvent.file().getFileName()));
     }

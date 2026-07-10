@@ -1,5 +1,8 @@
 package org.ikozmin.common.logging;
 
+/**
+ * Маскирует чувствительные значения перед выводом в лог.
+ */
 public final class Masking {
     private Masking() {}
 

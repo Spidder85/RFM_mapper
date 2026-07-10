@@ -1,4 +1,4 @@
-# Инструкция по доработкам от 2026-07-09
+# Инструкция по доработкам от 2026-07-10
 
 Корень проекта:
 
@@ -6,354 +6,548 @@
 G:\tmp\fedfsm\java
 ```
 
-Исходный код в этой инструкции автоматически не менялся. Ниже описано, что именно изменить вручную.
+Исходный код автоматически не менялся. Ниже указано, что именно изменить вручную.
 
-Текущая рабочая логика:
+## Краткий вывод
 
-1. `rfm-downloader` скачивает обновленные реестры и публикует события `RegistryUpdated`.
-2. `zenith-processor` в режиме `FULL` импортирует реестр, публикует офисные события `ZenithImportCompleted`, запускает массовую проверку, выгружает отчет и сохраняет summary.
-3. Офисный `zenith-processor` в режиме `CHECK_ONLY` берет события из своей сетевой папки, запускает проверку, выгружает отчет и при необходимости отправляет уведомление.
+По сегодняшним TODO нужно поправить не RFM, а в основном `zenith-processor`.
 
-Новые доработки нужны для трех вещей:
+Что сейчас неправильно:
 
-1. Убрать дублирование текста Zenith-уведомлений.
-2. Исключить двойную отправку уведомлений, когда включены уведомления и в RFM, и в Zenith.
-3. Сделать запуск Zenith из RFM пакетным: обработать все события за запуск, а не только первое.
+1. Если Zenith вернул ошибку по одному событию, `drain` прекращает обработку всей очереди.
+2. Отсутствие листа `Таблица_Проверок` в XLSX считается ошибкой, хотя это может означать “совпадений нет”.
+3. Ошибка “уже загружен более актуальный список” сейчас выглядит как падение программы, хотя это штатная бизнес-ситуация для устаревшего события.
+4. В логах выводится имя logger/class; если нужно оставить только важность и текст, надо поменять pattern в `logback.xml`.
+5. Events должны храниться 30 дней и затем удаляться одинаково для RFM и Zenith.
+
+Правильная схема:
+
+```text
+ошибка одного события != ошибка всей программы
+```
+
+`zenith-processor --drain` должен обработать всю очередь:
+
+```text
+event 1 -> success
+event 2 -> failed или skipped
+event 3 -> success
+drain завершился штатно
+```
 
 ---
 
-## 1. Общий builder для текста Zenith
+# 1. Ошибки Zenith API должны быть типизированы
 
-### Зачем
+## Зачем
 
-Сейчас Zenith-блок уведомления собирается в двух местах:
+Сейчас `ZenithApiClient` заворачивает почти все в обычный `IllegalStateException`. Из-за этого код выше не может понять:
 
 ```text
-rfm-downloader/src/main/java/org/ikozmin/rfm/service/UnifiedNotificationTextBuilder.java
-zenith-processor/src/main/java/org/ikozmin/zenith/notification/ZenithNotificationTextBuilder.java
+это сетевой сбой?
+это ошибка формата?
+это бизнес-ответ Zenith “список неактуален”?
 ```
 
-Это плохо: при изменении текста легко поправить один модуль и забыть второй.
-
-Правильнее вынести форматирование результата Zenith в `common`, а `rfm-downloader` и `zenith-processor` должны только вызывать его.
+Добавляем отдельное исключение `ZenithApiException`.
 
 ---
 
-### 1.1. Создать общий builder
+## 1.1. Создать ZenithApiException
 
-Создать файл:
+Файл:
 
 ```text
-common/src/main/java/org/ikozmin/common/notification/ZenithNotificationTextBuilder.java
+zenith-processor/src/main/java/org/ikozmin/zenith/client/ZenithApiException.java
 ```
 
-Полный код файла:
+Код:
 
 ```java
-package org.ikozmin.common.notification;
+package org.ikozmin.zenith.client;
 
-import org.ikozmin.common.event.ZenithProcessingSummary;
+public final class ZenithApiException extends RuntimeException {
+    private final String operation;
+    private final int status;
+    private final String body;
 
-import java.nio.file.Path;
-
-public final class ZenithNotificationTextBuilder {
-    public NotificationMessage buildStandalone(String catalog, ZenithProcessingSummary summary) {
-        String subject = "Результат проверки Zenith: " + displayCatalogName(catalog);
-        String lineSeparator = System.lineSeparator();
-        StringBuilder body = new StringBuilder();
-
-        body.append("Здравствуйте.").append(lineSeparator);
-        body.append(lineSeparator);
-        body.append("Завершена проверка в Zenith.").append(lineSeparator);
-        body.append(lineSeparator);
-        body.append("Перечень: ").append(displayCatalogName(catalog)).append(lineSeparator);
-
-        appendReportFile(body, summary, lineSeparator);
-
-        body.append(lineSeparator);
-        appendResultBlock(body, "", summary);
-        body.append(lineSeparator);
-        body.append("Это автоматическое уведомление. Не надо на него отвечать.").append(lineSeparator);
-
-        return new NotificationMessage(subject, body.toString());
+    public ZenithApiException(String operation, int status, String body) {
+        super("Zenith API error. operation=" + operation + ", status=" + status + ", body=" + body);
+        this.operation = operation;
+        this.status = status;
+        this.body = body;
     }
 
-    public void appendEmbeddedBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
-        body.append(System.lineSeparator());
-        body.append(indent).append("Проверка в Zenith").append(System.lineSeparator());
-        appendResultBlock(body, indent + indent, summary);
+    public String operation() {
+        return operation;
     }
 
-    private void appendResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
-        String lineSeparator = System.lineSeparator();
-
-        if (summary == null) {
-            body.append(indent)
-                    .append("Результат Zenith недоступен. Проверьте журнал zenith-processor и каталог events.")
-                    .append(lineSeparator);
-            return;
-        }
-
-        if (summary.reportFile() != null) {
-            body.append(indent)
-                    .append("Отчет: ")
-                    .append(normalize(summary.reportFile()))
-                    .append(lineSeparator);
-        }
-
-        if (summary.newPersons() <= 0) {
-            body.append(indent)
-                    .append("Новых лиц не найдено.")
-                    .append(lineSeparator);
-            body.append(indent)
-                    .append("Всего совпадений в отчете: ")
-                    .append(summary.totalPersons())
-                    .append(lineSeparator);
-            return;
-        }
-
-        body.append(indent)
-                .append("Найдены новые лица: ")
-                .append(summary.newPersons())
-                .append(lineSeparator);
-        body.append(lineSeparator);
-
-        for (int i = 0; i < summary.persons().size(); i++) {
-            ZenithProcessingSummary.Person person = summary.persons().get(i);
-
-            body.append(indent)
-                    .append(i + 1)
-                    .append(". ")
-                    .append(value(person.displayName()))
-                    .append(lineSeparator);
-            body.append(indent)
-                    .append("    Номер счета: ")
-                    .append(value(person.accountNumber()))
-                    .append(lineSeparator);
-            body.append(indent)
-                    .append("    Организация: ")
-                    .append(value(person.emitentName()))
-                    .append(lineSeparator);
-
-            if (person.packageDirectory() != null) {
-                body.append(indent)
-                        .append("    Черновики ФЭС: ")
-                        .append(normalize(person.packageDirectory()))
-                        .append(lineSeparator);
-            }
-
-            body.append(lineSeparator);
-        }
-
-        body.append(indent)
-                .append("Автоматическая отправка в Росфинмониторинг не выполнялась.")
-                .append(lineSeparator);
-        body.append(indent)
-                .append("Необходимо проверить подготовленные черновики и принять решение вручную.")
-                .append(lineSeparator);
+    public int status() {
+        return status;
     }
 
-    private void appendReportFile(StringBuilder body, ZenithProcessingSummary summary, String lineSeparator) {
-        if (summary != null && summary.reportFile() != null) {
-            body.append("Отчет: ").append(normalize(summary.reportFile())).append(lineSeparator);
-        }
+    public String body() {
+        return body;
     }
 
-    private String displayCatalogName(String catalog) {
-        if (catalog == null) {
-            return "Неизвестный перечень";
+    public boolean isObsoletePersonListImport() {
+        if (!"import person list".equals(operation)) {
+            return false;
         }
 
-        return switch (catalog.toLowerCase()) {
-            case "te2", "te21" -> "Террористы и экстремисты";
-            case "mvk" -> "Решения МВК";
-            case "un" -> "Перечень ООН";
-            case "un-rus" -> "Перечень ООН на русском языке";
-            default -> catalog;
-        };
-    }
+        if (status != 400) {
+            return false;
+        }
 
-    private String value(String value) {
-        return value == null || value.isBlank() ? "-" : value;
-    }
+        if (body == null) {
+            return false;
+        }
 
-    private String normalize(Path path) {
-        return path.toString().replace('\\', '/');
+        String normalized = body.toLowerCase();
+
+        return normalized.contains("уже загружен список")
+                && normalized.contains("неактуален");
     }
 }
 ```
 
 ---
 
-### 1.2. Обновить RFM builder
+## 1.2. Обновить ZenithApiClient
 
 Файл:
 
 ```text
-rfm-downloader/src/main/java/org/ikozmin/rfm/service/UnifiedNotificationTextBuilder.java
+zenith-processor/src/main/java/org/ikozmin/zenith/client/ZenithApiClient.java
+```
+
+В этом файле нужно заменить четыре метода: `importPersonList`, `sendString`, `sendNoBody`, `validate`.
+
+### Заменить метод importPersonList
+
+Найти текущий метод:
+
+```java
+public void importPersonList(Path file, String fileFormat, String listCategory, boolean append) {
+```
+
+Заменить весь метод на:
+
+```java
+public void importPersonList(Path file, String fileFormat, String listCategory, boolean append) {
+    if (file == null || !Files.isRegularFile(file)) {
+        throw new IllegalArgumentException("Person list file not found: " + file);
+    }
+
+    StringBuilder query = new StringBuilder()
+            .append("?file_format=")
+            .append(encode(fileFormat))
+            .append("&append=")
+            .append(append);
+
+    if (listCategory != null && !listCategory.isBlank()) {
+        query.append("&list_category=").append(encode(listCategory));
+    }
+
+    URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists" + query);
+
+    HttpRequest.BodyPublisher bodyPublisher;
+
+    try {
+        bodyPublisher = HttpRequest.BodyPublishers.ofFile(file);
+    } catch (Exception e) {
+        throw new IllegalStateException("Failed to prepare person list import request. file=" + file, e);
+    }
+
+    HttpRequest request = base(uri)
+            .header("Content-Type", "application/octet-stream")
+            .POST(bodyPublisher)
+            .build();
+
+    sendNoBody(request, "import person list");
+}
+```
+
+Почему так:
+
+1. Ошибка подготовки файла остается `IllegalStateException`.
+2. Ошибка ответа Zenith больше не маскируется как “Failed to prepare”.
+3. `ZenithApiException` поднимется наверх без лишней обертки.
+
+### Заменить метод sendString
+
+Найти:
+
+```java
+private String sendString(HttpRequest request, String operation) {
+```
+
+Заменить весь метод на:
+
+```java
+private String sendString(HttpRequest request, String operation) {
+    try {
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        validate(response.statusCode(), operation, response.body());
+        return response.body();
+    } catch (ZenithApiException e) {
+        throw e;
+    } catch (Exception e) {
+        throw new IllegalStateException("Zenith API call failed: " + operation, e);
+    }
+}
+```
+
+### Заменить метод sendNoBody
+
+Найти:
+
+```java
+private void sendNoBody(HttpRequest request, String operation) {
+```
+
+Заменить весь метод на:
+
+```java
+private void sendNoBody(HttpRequest request, String operation) {
+    try {
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        validate(response.statusCode(), operation, response.body());
+    } catch (ZenithApiException e) {
+        throw e;
+    } catch (Exception e) {
+        throw new IllegalStateException("Zenith API call failed: " + operation, e);
+    }
+}
+```
+
+### Заменить метод validate
+
+Найти:
+
+```java
+private void validate(int status, String operation, String body) {
+```
+
+Заменить весь метод на:
+
+```java
+private void validate(int status, String operation, String body) {
+    if (status >= 200 && status < 300) {
+        return;
+    }
+
+    throw new ZenithApiException(operation, status, body);
+}
+```
+
+---
+
+# 2. Устаревший список Zenith должен быть skipped, а не падением программы
+
+## Зачем
+
+Пример из лога:
+
+```text
+Уже загружен список за дату 09.07.2026, загружаемый вами список от 07.07.2026 неактуален
+```
+
+Это не ошибка Java-программы. Это бизнес-ответ Zenith: событие устарело, импортировать его нельзя и не нужно.
+
+Такое событие надо:
+
+1. Не гонять бесконечно через `failed/retry`.
+2. Пометить как обработанное.
+3. Сохранить summary со статусом “пропущено”.
+4. Продолжить остальные события.
+
+---
+
+## 2.1. Обновить ZenithProcessingSummary
+
+Файл:
+
+```text
+common/src/main/java/org/ikozmin/common/event/ZenithProcessingSummary.java
 ```
 
 Заменить файл полностью:
 
 ```java
-package org.ikozmin.rfm.service;
+package org.ikozmin.common.event;
 
-import org.ikozmin.common.event.ZenithProcessingSummary;
-import org.ikozmin.common.notification.NotificationMessage;
-import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
-import org.ikozmin.rfm.model.CatalogType;
-
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-public final class UnifiedNotificationTextBuilder {
-    private final ZenithNotificationTextBuilder zenithTextBuilder = new ZenithNotificationTextBuilder();
-
-    public NotificationMessage build(List<RegistryNotificationItem> items) throws Exception {
-        if (items == null || items.isEmpty()) {
-            throw new IllegalArgumentException("Notification items are empty");
-        }
-
-        String subject = items.size() == 1
-                ? "Обновлен перечень Росфинмониторинга: " + displayCatalogName(items.getFirst().result().catalogType().getCode())
-                : "Обновлены перечни Росфинмониторинга: " + items.size();
-
-        String indent = "    ";
-        StringBuilder body = new StringBuilder();
-
-        body.append("Здравствуйте.").append(System.lineSeparator());
-        body.append(System.lineSeparator());
-        body.append("В системе Росфинмониторинга опубликованы обновления перечней.").append(System.lineSeparator());
-        body.append("Файлы успешно загружены.").append(System.lineSeparator());
-        body.append(System.lineSeparator());
-        body.append("Дата проверки: ")
-                .append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss")))
-                .append(System.lineSeparator());
-        body.append(System.lineSeparator());
-
-        for (int i = 0; i < items.size(); i++) {
-            RegistryNotificationItem item = items.get(i);
-            UpdateResult result = item.result();
-
-            body.append(i + 1)
-                    .append(". ")
-                    .append(displayCatalogName(result.catalogType().getCode()))
-                    .append(System.lineSeparator());
-
-            body.append(indent).append("Предыдущий idXml: ")
-                    .append(result.oldIdXml() == null ? "отсутствует" : result.oldIdXml())
-                    .append(System.lineSeparator());
-
-            body.append(indent).append("Новый idXml: ")
-                    .append(result.idXml())
-                    .append(System.lineSeparator());
-
-            if (result.file() != null) {
-                body.append(indent).append("Файл для обработки: ")
-                        .append(result.file().toAbsolutePath())
-                        .append(System.lineSeparator());
-
-                if (Files.exists(result.file())) {
-                    body.append(indent).append("Размер файла: ")
-                            .append(formatFileSize(Files.size(result.file())))
-                            .append(System.lineSeparator());
-                }
-            }
-
-            if (result.sha256() != null && !result.sha256().isBlank()) {
-                body.append(indent).append("SHA-256 архива: ")
-                        .append(result.sha256())
-                        .append(System.lineSeparator());
-            }
-
-            zenithTextBuilder.appendEmbeddedBlock(body, indent, item.zenithSummary());
-            body.append(System.lineSeparator());
-        }
-
-        body.append("Это автоматическое уведомление. Не надо на него отвечать.").append(System.lineSeparator());
-
-        return new NotificationMessage(subject, body.toString());
-    }
-
-    public NotificationMessage build(
-            String catalogType,
-            String idXml,
-            String oldIdXml,
-            Path filePath,
-            String checksum,
-            ZenithProcessingSummary zenithSummary
-    ) throws Exception {
-        UpdateResult result = new UpdateResult(
+public record ZenithProcessingSummary(
+        String eventId,
+        boolean processed,
+        Path reportFile,
+        int totalPersons,
+        int newPersons,
+        Path fesPackageRoot,
+        List<Person> persons,
+        String message
+) {
+    public static ZenithProcessingSummary disabled(String eventId) {
+        return new ZenithProcessingSummary(
+                eventId,
                 true,
-                CatalogType.from(catalogType),
-                oldIdXml,
-                idXml,
-                filePath,
-                filePath,
-                checksum,
-                safeFileSize(filePath),
-                LocalDateTime.now().toString()
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                "Отчет Zenith отключен в конфигурации"
         );
-
-        return build(List.of(new RegistryNotificationItem(result, zenithSummary)));
     }
 
-    private long safeFileSize(Path file) {
-        if (file == null || !Files.exists(file)) {
-            return 0L;
-        }
-
-        try {
-            return Files.size(file);
-        } catch (Exception e) {
-            return 0L;
-        }
+    public static ZenithProcessingSummary skipped(String eventId, String message) {
+        return new ZenithProcessingSummary(
+                eventId,
+                true,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                message
+        );
     }
 
-    private String formatFileSize(long size) {
-        if (size < 1024) {
-            return size + " байт";
-        }
-
-        if (size < 1024 * 1024) {
-            return String.format("%.2f KБ", size / 1024.0);
-        }
-
-        if (size < 1024 * 1024 * 1024) {
-            return String.format("%.2f MБ", size / (1024.0 * 1024));
-        }
-
-        return String.format("%.2f ГБ", size / (1024.0 * 1024 * 1024));
+    public static ZenithProcessingSummary failed(String eventId, String message) {
+        return new ZenithProcessingSummary(
+                eventId,
+                false,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                message
+        );
     }
 
-    private String displayCatalogName(String catalogType) {
-        if (catalogType == null) {
-            return "Неизвестный перечень";
-        }
+    public static ZenithProcessingSummary noNewPersons(String eventId, Path reportFile, int totalPersons) {
+        return new ZenithProcessingSummary(
+                eventId,
+                true,
+                reportFile,
+                totalPersons,
+                0,
+                null,
+                List.of(),
+                "Новых лиц не найдено"
+        );
+    }
 
-        return switch (catalogType.toLowerCase()) {
-            case "te2", "te21" -> "Террористы и экстремисты";
-            case "mvk" -> "Решения МВК";
-            case "un" -> "Перечень ООН";
-            case "un-rus" -> "Перечень ООН на русском языке";
-            default -> catalogType;
-        };
+    public record Person(
+            String displayName,
+            String accountNumber,
+            String emitentName,
+            Path packageDirectory
+    ) {
     }
 }
 ```
 
-Что изменилось:
+---
 
-1. Zenith-блок больше не формируется вручную внутри RFM.
-2. RFM вызывает общий `ZenithNotificationTextBuilder`.
-3. Удаляется дублирование текста между RFM и Zenith.
+## 2.2. Обновить ZenithWorkflowService
+
+Файл:
+
+```text
+zenith-processor/src/main/java/org/ikozmin/zenith/service/ZenithWorkflowService.java
+```
+
+Добавить импорт:
+
+```java
+import org.ikozmin.zenith.client.ZenithApiException;
+```
+
+### Заменить метод processFull
+
+Найти:
+
+```java
+public ZenithProcessingSummary processFull(RegistryUpdatedEvent event) {
+```
+
+Заменить весь метод на:
+
+```java
+public ZenithProcessingSummary processFull(RegistryUpdatedEvent event) {
+    log.info("Processing full Zenith workflow. eventId={}, catalog={}, file={}",
+            event.eventId(),
+            event.catalog(),
+            event.registryFile());
+
+    boolean imported = importPersonListIfEnabled(event);
+
+    if (!imported) {
+        return ZenithProcessingSummary.skipped(
+                event.eventId(),
+                "Реестр не импортирован в Zenith: в Zenith уже загружен более актуальный список. Каталог: "
+                        + event.catalog()
+        );
+    }
+
+    new ZenithImportEventPublisher(config.getEvents()).publish(event);
+    runMassCheckIfEnabled(event.catalog());
+
+    ZenithProcessingSummary summary = createReportIfEnabled(
+            event.eventId(),
+            event.catalog(),
+            event.idXml()
+    );
+
+    log.info("Full Zenith workflow completed. eventId={}", event.eventId());
+
+    return summary;
+}
+```
+
+### Заменить метод processImportOnly
+
+Найти:
+
+```java
+public ZenithProcessingSummary processImportOnly(RegistryUpdatedEvent event) {
+```
+
+Заменить весь метод на:
+
+```java
+public ZenithProcessingSummary processImportOnly(RegistryUpdatedEvent event) {
+    log.info("Processing Zenith import only. eventId={}, catalog={}, file={}",
+            event.eventId(),
+            event.catalog(),
+            event.registryFile());
+
+    boolean imported = importPersonListIfEnabled(event);
+
+    if (!imported) {
+        return ZenithProcessingSummary.skipped(
+                event.eventId(),
+                "Реестр не импортирован в Zenith: в Zenith уже загружен более актуальный список. Каталог: "
+                        + event.catalog()
+        );
+    }
+
+    new ZenithImportEventPublisher(config.getEvents()).publish(event);
+
+    return new ZenithProcessingSummary(
+            event.eventId(),
+            true,
+            null,
+            0,
+            0,
+            null,
+            List.of(),
+            "Реестр импортирован в Zenith. Каталог: " + event.catalog()
+    );
+}
+```
+
+### Заменить метод importPersonListIfEnabled
+
+Найти:
+
+```java
+private void importPersonListIfEnabled(RegistryUpdatedEvent event) {
+```
+
+Заменить весь метод на:
+
+```java
+private boolean importPersonListIfEnabled(RegistryUpdatedEvent event) {
+    ZenithConfig.Import importConfig = config.getZenith().getImportConfig();
+
+    if (importConfig != null && !importConfig.isEnabled()) {
+        log.info("Zenith import step is disabled");
+        return true;
+    }
+
+    ZenithImportFormatResolver.ImportFormat importFormat = importFormatResolver.resolve(
+            event.catalog(),
+            importConfig
+    );
+
+    try {
+        apiClient.importPersonList(
+                event.registryFile(),
+                importFormat.fileFormat(),
+                importFormat.listCategory(),
+                false
+        );
+    } catch (ZenithApiException e) {
+        if (e.isObsoletePersonListImport()) {
+            log.warn("Registry list is obsolete for Zenith and will be skipped. eventId={}, catalog={}, file={}, apiMessage={}",
+                    event.eventId(),
+                    event.catalog(),
+                    event.registryFile(),
+                    e.body());
+            return false;
+        }
+
+        throw e;
+    }
+
+    log.info("Registry list imported into Zenith. eventId={}, catalog={}, fileFormat={}, listCategory={}, file={}",
+            event.eventId(),
+            event.catalog(),
+            importFormat.fileFormat(),
+            importFormat.listCategory() == null ? "<not required>" : importFormat.listCategory(),
+            event.registryFile());
+
+    return true;
+}
+```
+
+Почему `false` только для устаревшего списка:
+
+1. Такой импорт нельзя исправить повтором.
+2. Событие не должно оставаться в `failed`.
+3. Остальные ошибки Zenith пока считаем ошибками события и отправляем в `failed`.
 
 ---
 
-### 1.3. Обновить ZenithProcessorMain
+# 3. Drain должен продолжать очередь после ошибки одного события
+
+## Зачем
+
+Сейчас:
+
+```text
+event 1 -> ok
+event 2 -> ошибка
+drain остановился
+event 3 -> не обработан
+```
+
+Нужно:
+
+```text
+event 1 -> ok
+event 2 -> failed
+event 3 -> ok
+drain завершился
+```
+
+---
+
+## 3.1. Обновить ZenithProcessorMain
 
 Файл:
 
@@ -361,321 +555,560 @@ public final class UnifiedNotificationTextBuilder {
 zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java
 ```
 
-Удалить импорт:
+### Добавить константы
+
+После строки:
 
 ```java
-import org.ikozmin.zenith.notification.ZenithNotificationTextBuilder;
+private static final Logger log = LoggerFactory.getLogger(ZenithProcessorMain.class);
 ```
 
-Добавить импорт:
+добавить:
 
 ```java
-import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
+private static final int EXIT_OK = 0;
+private static final int EXIT_PROGRAM_ERROR = 1;
+private static final int EXIT_EVENT_FAILED = 2;
+private static final int EXIT_NO_EVENTS = 3;
 ```
 
-Найти метод:
+### Заменить catch в call
+
+Найти:
 
 ```java
-private void sendNotificationIfNeeded(ZenithConfig config, String catalog, ZenithProcessingSummary summary) {
-    NotificationDispatcher dispatcher = new NotificationDispatcher(config.getNotifications());
+return 1;
+```
 
-    if (!dispatcher.isEnabled()) {
-        return;
+в методе `call()` и заменить на:
+
+```java
+return EXIT_PROGRAM_ERROR;
+```
+
+### Заменить processDrain
+
+Найти:
+
+```java
+private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
+```
+
+Заменить весь метод на:
+
+```java
+private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
+    int processed = 0;
+    int failed = 0;
+
+    while (true) {
+        int exitCode = processOnce(config, workflowMode, false);
+
+        if (exitCode == EXIT_NO_EVENTS) {
+            log.info("Zenith drain completed. processedEvents={}, failedEvents={}", processed, failed);
+            return EXIT_OK;
+        }
+
+        if (exitCode == EXIT_EVENT_FAILED) {
+            failed++;
+            continue;
+        }
+
+        if (exitCode != EXIT_OK) {
+            return exitCode;
+        }
+
+        processed++;
+    }
+}
+```
+
+### Заменить processRegistryUpdatedEvent
+
+Найти:
+
+```java
+private Integer processRegistryUpdatedEvent(
+```
+
+Заменить весь метод на:
+
+```java
+private Integer processRegistryUpdatedEvent(
+        ZenithConfig config,
+        ZenithWorkflowMode workflowMode,
+        boolean requireEventForIteration
+) {
+    FileEventConsumer consumer = new FileEventConsumer(
+            Path.of(config.getEvents().getRegistryUpdatedDirectory())
+    );
+
+    if (retryFailed) {
+        Optional<Path> requeued = consumer.requeueOldestFailed();
+
+        if (requeued.isEmpty()) {
+            log.info("No failed registry update events found");
+            return EXIT_OK;
+        }
+
+        log.info("Failed event requeued: {}", requeued.get().toAbsolutePath());
     }
 
-    NotificationMessage message = new ZenithNotificationTextBuilder().build(catalog, summary);
-    dispatcher.send(message);
+    ZenithWorkflowService workflowService = new ZenithWorkflowService(config);
+    Optional<FileEventConsumer.ClaimedEvent> claimedEvent = consumer.claimNext();
+
+    if (claimedEvent.isEmpty()) {
+        return noEvent(requireEventForIteration);
+    }
+
+    try {
+        ZenithProcessingSummary summary = workflowMode == ZenithWorkflowMode.IMPORT_ONLY
+                ? workflowService.processImportOnly(claimedEvent.get().event())
+                : workflowService.processFull(claimedEvent.get().event());
+
+        saveSummary(config, summary);
+
+        if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+            sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
+        }
+
+        consumer.markProcessed(claimedEvent.get());
+
+        return EXIT_OK;
+    } catch (Exception e) {
+        log.error("Zenith registry event failed. eventId={}, catalog={}, error={}",
+                claimedEvent.get().event().eventId(),
+                claimedEvent.get().event().catalog(),
+                e.getMessage(),
+                e);
+
+        saveFailureSummary(config, claimedEvent.get().event().eventId(), e);
+        consumer.markFailed(claimedEvent.get());
+
+        return EXIT_EVENT_FAILED;
+    }
+}
+```
+
+### Заменить processImportCompletedEvent
+
+Найти:
+
+```java
+private Integer processImportCompletedEvent(ZenithConfig config, boolean requireEventForIteration) {
+```
+
+Заменить весь метод на:
+
+```java
+private Integer processImportCompletedEvent(ZenithConfig config, boolean requireEventForIteration) {
+    ZenithImportCompletedEventConsumer consumer = new ZenithImportCompletedEventConsumer(
+            Path.of(config.getEvents().getCheckDirectory())
+    );
+
+    ZenithWorkflowService workflowService = new ZenithWorkflowService(config);
+    Optional<ZenithImportCompletedEventConsumer.ClaimedEvent> claimedEvent = consumer.claimNext();
+
+    if (claimedEvent.isEmpty()) {
+        return noEvent(requireEventForIteration);
+    }
+
+    try {
+        ZenithProcessingSummary summary = workflowService.processCheckOnly(claimedEvent.get().event());
+        saveSummary(config, summary);
+        sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
+        consumer.markProcessed(claimedEvent.get());
+
+        return EXIT_OK;
+    } catch (Exception e) {
+        log.error("Zenith check event failed. eventId={}, sourceEventId={}, catalog={}, error={}",
+                claimedEvent.get().event().eventId(),
+                claimedEvent.get().event().sourceEventId(),
+                claimedEvent.get().event().catalog(),
+                e.getMessage(),
+                e);
+
+        saveFailureSummary(config, claimedEvent.get().event().sourceEventId(), e);
+        consumer.markFailed(claimedEvent.get());
+
+        return EXIT_EVENT_FAILED;
+    }
+}
+```
+
+### Заменить noEvent
+
+Найти:
+
+```java
+private int noEvent(boolean requireEventForIteration) {
+```
+
+Заменить весь метод на:
+
+```java
+private int noEvent(boolean requireEventForIteration) {
+    if (requireEventForIteration) {
+        log.error("No events found, but event is required");
+        System.err.println("No events found, but event is required");
+        return EXIT_NO_EVENTS;
+    }
+
+    log.info("No events found");
+    return EXIT_NO_EVENTS;
+}
+```
+
+### Добавить saveFailureSummary
+
+После метода `saveSummary` добавить:
+
+```java
+private void saveFailureSummary(ZenithConfig config, String eventId, Exception e) {
+    try {
+        ZenithProcessingSummary summary = ZenithProcessingSummary.failed(
+                eventId,
+                "Ошибка обработки события Zenith: " + e.getMessage()
+        );
+
+        saveSummary(config, summary);
+    } catch (Exception summaryError) {
+        log.warn("Failed to save failure summary. eventId={}, error={}",
+                eventId,
+                summaryError.getMessage());
+    }
+}
+```
+
+Итог:
+
+1. `once` вернет код `2`, если конкретное событие упало.
+2. `drain` не остановится на коде `2`.
+3. Событие уйдет в `failed`.
+4. Summary сохранится, чтобы RFM увидел результат Zenith.
+
+---
+
+# 4. Отсутствие листа в XLSX не должно быть ошибкой
+
+## Зачем
+
+В TODO указан правильный сценарий:
+
+```java
+Sheet sheet = workbook.getSheet(CHECKS_SHEET_NAME);
+if (sheet == null) {
+    throw new IllegalStateException("Sheet not found in Zenith report: " + CHECKS_SHEET_NAME);
+}
+```
+
+Если в отчете всего один лист и нет `Таблица_Проверок`, это может означать, что проверка никого не нашла. Для программы это не ошибка.
+
+---
+
+## 4.1. Обновить ZenithReportAnalyzer
+
+Файл:
+
+```text
+zenith-processor/src/main/java/org/ikozmin/zenith/report/ZenithReportAnalyzer.java
+```
+
+В методе `analyze` найти блок:
+
+```java
+Sheet sheet = workbook.getSheet(CHECKS_SHEET_NAME);
+if (sheet == null) {
+    throw new IllegalStateException("Sheet not found in Zenith report: " + CHECKS_SHEET_NAME);
 }
 ```
 
 Заменить на:
 
 ```java
-private void sendNotificationIfNeeded(ZenithConfig config, String catalog, ZenithProcessingSummary summary) {
-    if (suppressNotification) {
-        log.info("Zenith notification is suppressed by command line option");
-        return;
-    }
+Sheet sheet = workbook.getSheet(CHECKS_SHEET_NAME);
+if (sheet == null) {
+    log.info("Zenith report does not contain checks sheet. Treating report as empty. file={}, sheet={}",
+            reportFile.toAbsolutePath(),
+            CHECKS_SHEET_NAME);
 
-    NotificationDispatcher dispatcher = new NotificationDispatcher(config.getNotifications());
-
-    if (!dispatcher.isEnabled()) {
-        return;
-    }
-
-    NotificationMessage message = new ZenithNotificationTextBuilder().buildStandalone(catalog, summary);
-    dispatcher.send(message);
+    return new ZenithReportAnalysis(reportFile, List.of());
 }
 ```
 
----
-
-### 1.4. Удалить старый Zenith builder
-
-Удалить файл:
-
-```text
-zenith-processor/src/main/java/org/ikozmin/zenith/notification/ZenithNotificationTextBuilder.java
-```
-
-Папку можно оставить, если в ней есть другие файлы. Если папка стала пустой, ее тоже можно удалить.
+Важно: импорт `java.util.List` уже есть, добавлять его не нужно.
 
 ---
 
-## 2. Подавление двойных уведомлений
+# 5. Уведомление должно уметь показать failed/skipped summary
 
-### Зачем
+## Зачем
 
-Нужно правило:
-
-1. Если `rfm-downloader` сам отправляет итоговое уведомление, то запущенный из него `zenith-processor` не должен отправлять свое отдельное уведомление.
-2. Если `zenith-processor` запускается отдельно в офисе, он должен отправлять уведомление по своему `zenith-config.json`.
-3. Если в RFM уведомления выключены, но в Zenith включены, Zenith может отправить standalone-уведомление.
-
-Для этого добавляем CLI-флаг:
-
-```text
---suppress-notification
-```
-
-Этот флаг передается только при запуске Zenith из RFM, когда у RFM включены уведомления.
+После добавления `ZenithProcessingSummary.failed(...)` и `skipped(...)` уведомления не должны писать “Новых лиц не найдено”, если реально событие не обработано или пропущено.
 
 ---
 
-### 2.1. Добавить option в ZenithProcessorMain
+## 5.1. Обновить общий ZenithNotificationTextBuilder
 
 Файл:
 
 ```text
-zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java
+common/src/main/java/org/ikozmin/common/notification/ZenithNotificationTextBuilder.java
 ```
 
-После поля:
+В методе `appendResultBlock` после проверки:
 
 ```java
-@Option(names = "--retry-failed", description = "Move one failed event back to new queue before processing")
-private boolean retryFailed;
+if (summary == null) {
 ```
 
-Добавить:
+и до блока:
 
 ```java
-@Option(names = "--suppress-notification", description = "Do not send Zenith notification for this run")
-private boolean suppressNotification;
+if (summary.reportFile() != null) {
 ```
 
-Метод `sendNotificationIfNeeded` заменить как указано в пункте 1.3.
+добавить:
+
+```java
+if (!summary.processed()) {
+    body.append(indent)
+            .append("Проверка в Zenith завершилась ошибкой.")
+            .append(lineSeparator);
+    body.append(indent)
+            .append("Причина: ")
+            .append(value(summary.message()))
+            .append(lineSeparator);
+    return;
+}
+
+if (summary.reportFile() == null && summary.totalPersons() == 0 && summary.newPersons() == 0
+        && summary.message() != null && !summary.message().isBlank()) {
+    body.append(indent)
+            .append(summary.message())
+            .append(lineSeparator);
+    return;
+}
+```
+
+Смысл:
+
+1. `processed=false` отображается как ошибка обработки.
+2. `skipped(...)` отображается как пропущенное событие с понятным текстом.
+3. Нормальный пустой отчет продолжает отображаться как “Новых лиц не найдено”.
 
 ---
 
-### 2.2. Обновить ZenithTriggerConfig
+# 6. Логи без имени logger/class
+
+## Ответ на вопрос из TODO
+
+Сейчас в логе выводится не имя метода, а имя logger/class:
+
+```xml
+%logger{48}
+```
+
+Если нужно оставить только дату, важность и текст, меняем pattern.
+
+---
+
+## 6.1. Обновить zenith logback.xml
 
 Файл:
 
 ```text
-rfm-downloader/src/main/java/org/ikozmin/rfm/config/ZenithTriggerConfig.java
+zenith-processor/src/main/resources/logback.xml
 ```
 
 Заменить файл полностью:
 
-```java
-package org.ikozmin.rfm.config;
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<configuration>
+    <property name="LOG_DIR" value="logs"/>
+    <property name="LOG_FILE" value="${LOG_DIR}/zenith-processor.log"/>
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level - %msg%n</pattern>
+        </encoder>
+    </appender>
 
-@JsonIgnoreProperties(ignoreUnknown = true)
-public final class ZenithTriggerConfig {
-    @JsonProperty("Enabled")
-    private boolean enabled;
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE}</file>
 
-    @JsonProperty("Command")
-    private String command;
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/zenith-processor.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>300MB</totalSizeCap>
+        </rollingPolicy>
 
-    @JsonProperty("WorkingDirectory")
-    private String workingDirectory;
+        <encoder>
+            <charset>UTF-8</charset>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level - %msg%n</pattern>
+        </encoder>
+    </appender>
 
-    @JsonProperty("TimeoutSeconds")
-    private Integer timeoutSeconds;
+    <logger name="org.ikozmin.zenith" level="INFO"/>
 
-    @JsonProperty("SuppressNotificationWhenRfmNotificationEnabled")
-    private Boolean suppressNotificationWhenRfmNotificationEnabled;
-
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public String getCommand() {
-        return command;
-    }
-
-    public String getWorkingDirectory() {
-        return workingDirectory == null || workingDirectory.isBlank()
-                ? "."
-                : workingDirectory;
-    }
-
-    public int getTimeoutSeconds() {
-        return timeoutSeconds == null ? 1800 : timeoutSeconds;
-    }
-
-    public boolean isSuppressNotificationWhenRfmNotificationEnabled() {
-        return suppressNotificationWhenRfmNotificationEnabled == null
-                || suppressNotificationWhenRfmNotificationEnabled;
-    }
-}
-```
-
----
-
-### 2.3. Обновить ZenithProcessorTrigger
-
-Файл:
-
-```text
-rfm-downloader/src/main/java/org/ikozmin/rfm/trigger/ZenithProcessorTrigger.java
-```
-
-Заменить файл полностью:
-
-```java
-package org.ikozmin.rfm.trigger;
-
-import org.ikozmin.rfm.config.ZenithTriggerConfig;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
-
-public final class ZenithProcessorTrigger {
-    private static final Logger log = LoggerFactory.getLogger(ZenithProcessorTrigger.class);
-
-    private final ZenithTriggerConfig config;
-
-    public ZenithProcessorTrigger(ZenithTriggerConfig config) {
-        this.config = config;
-    }
-
-    public boolean isEnabled() {
-        return config != null && config.isEnabled();
-    }
-
-    public void runOnce(boolean suppressNotification) {
-        if (!isEnabled()) {
-            return;
-        }
-
-        if (config.getCommand() == null || config.getCommand().isBlank()) {
-            throw new IllegalStateException("ZenithTrigger.Command is empty");
-        }
-
-        try {
-            Path workingDirectory = resolveWorkingDirectory(config.getWorkingDirectory());
-            String command = buildCommand(config.getCommand(), suppressNotification);
-
-            log.info("Starting zenith processor. workingDirectory={}, command={}",
-                    workingDirectory,
-                    command);
-
-            Process process = new ProcessBuilder(
-                    "cmd.exe",
-                    "/d",
-                    "/c",
-                    command
-            )
-                    .directory(workingDirectory.toFile())
-                    .inheritIO()
-                    .start();
-
-            boolean finished = process.waitFor(config.getTimeoutSeconds(), TimeUnit.SECONDS);
-
-            if (!finished) {
-                process.destroyForcibly();
-                throw new IllegalStateException("Zenith processor timeout: "
-                        + Duration.ofSeconds(config.getTimeoutSeconds()));
-            }
-
-            if (process.exitValue() != 0) {
-                throw new IllegalStateException("Zenith processor failed. exitCode=" + process.exitValue());
-            }
-
-            log.info("Zenith processor completed successfully");
-        } catch (Exception e) {
-            throw new IllegalStateException("Failed to run zenith processor", e);
-        }
-    }
-
-    private String buildCommand(String baseCommand, boolean suppressNotification) {
-        if (!suppressNotification) {
-            return baseCommand;
-        }
-
-        if (baseCommand.contains("--suppress-notification")) {
-            return baseCommand;
-        }
-
-        return baseCommand + " --suppress-notification";
-    }
-
-    private Path resolveWorkingDirectory(String value) {
-        Path path = Path.of(value);
-
-        if (path.isAbsolute()) {
-            return path.normalize();
-        }
-
-        String appHome = System.getProperty("app.home");
-
-        if (appHome != null && !appHome.isBlank()) {
-            return Path.of(appHome).resolve(path).normalize();
-        }
-
-        return Path.of(System.getProperty("user.dir")).resolve(path).normalize();
-    }
-}
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>
 ```
 
 Что изменилось:
 
-1. Метод теперь принимает `suppressNotification`.
-2. Если нужно, к команде добавляется `--suppress-notification`.
-3. Удален закомментированный `parseCommand`, который сейчас не используется.
+1. Убран `%logger{48}`.
+2. Старые логи будут архивироваться как `.log.gz`.
+3. Активный файл останется `logs/zenith-processor.log`.
 
 ---
 
-## 3. RFM должен запускать Zenith один раз после публикации всех событий
+# 7. Events: хранить месяц и удалять
 
-### Зачем
+## Решение
 
-Сейчас в `Main` логика такая:
-
-```text
-скачали te21 -> создали event -> запустили zenith once
-скачали un   -> создали event -> запустили zenith once
-скачали mvk  -> создали event -> запустили zenith once
-```
-
-Это работает, но архитектурно хуже:
-
-1. При нескольких обновлениях плодятся несколько запусков Zenith.
-2. `run-zenith-once.bat` по смыслу берет только одно событие.
-3. RFM уже умеет отправлять одно итоговое уведомление, значит и Zenith лучше запускать один раз после публикации всех событий.
-
-Новая логика:
+Делаем единое правило для всех event-очередей:
 
 ```text
-скачали все обновленные реестры
-создали все events
-один раз запустили zenith drain
-загрузили summary по каждому event
-отправили одно итоговое уведомление RFM
+events хранятся 30 дней, затем удаляются
 ```
+
+Это касается:
+
+```text
+rfm-downloader: events/registry-updated
+zenith-processor: events/registry-updated
+zenith-processor: events/zenith-imported/...
+```
+
+Не делаем вечный `archive`, потому что он все равно будет бесконечно расти. Для этой программы достаточно месячного технологического следа: за месяц можно посмотреть историю обработки, failed-события и summary, после чего файлы безопасно удаляются.
+
+Чтобы не дублировать код, сервис очистки кладем в `common`.
 
 ---
 
-### 3.1. В Main добавить внутренний record
+## 7.1. Создать общий EventRetentionService
+
+Создать файл:
+
+```text
+common/src/main/java/org/ikozmin/common/event/EventRetentionService.java
+```
+
+Код:
+
+```java
+package org.ikozmin.common.event;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.stream.Stream;
+
+public final class EventRetentionService {
+    private static final Logger log = LoggerFactory.getLogger(EventRetentionService.class);
+
+    public static final int DEFAULT_KEEP_DAYS = 30;
+
+    private static final List<String> EVENT_SUBDIRECTORIES = List.of(
+            "processed",
+            "failed",
+            "results"
+    );
+
+    private final int keepDays;
+
+    public EventRetentionService() {
+        this(DEFAULT_KEEP_DAYS);
+    }
+
+    public EventRetentionService(int keepDays) {
+        this.keepDays = Math.max(1, keepDays);
+    }
+
+    public void apply(Path eventRootDir) {
+        if (eventRootDir == null) {
+            return;
+        }
+
+        for (String subdirectory : EVENT_SUBDIRECTORIES) {
+            clean(eventRootDir.resolve(subdirectory));
+        }
+    }
+
+    private void clean(Path directory) {
+        if (!Files.isDirectory(directory)) {
+            return;
+        }
+
+        Instant threshold = Instant.now().minus(keepDays, ChronoUnit.DAYS);
+
+        try (Stream<Path> files = Files.list(directory)) {
+            files
+                    .filter(Files::isRegularFile)
+                    .filter(file -> isOlderThan(file, threshold))
+                    .forEach(this::deleteQuietly);
+        } catch (Exception e) {
+            log.warn("Event retention failed. dir={}, keepDays={}, error={}",
+                    directory,
+                    keepDays,
+                    e.getMessage());
+        }
+    }
+
+    private boolean isOlderThan(Path file, Instant threshold) {
+        try {
+            return Files.getLastModifiedTime(file).toInstant().isBefore(threshold);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+            log.info("Old event file deleted. file={}", file.toAbsolutePath());
+        } catch (Exception e) {
+            log.warn("Failed to delete old event file. file={}, error={}",
+                    file,
+                    e.getMessage());
+        }
+    }
+}
+```
+
+Почему `common`:
+
+1. Очереди RFM и Zenith имеют одинаковую структуру.
+2. Не нужно держать два почти одинаковых класса.
+3. Не нужно добавлять новый блок в пользовательский `zenith-config.json`.
+
+---
+
+## 7.2. Удалить старый RFM EventRetentionService
+
+Удалить файл:
+
+```text
+rfm-downloader/src/main/java/org/ikozmin/rfm/service/EventRetentionService.java
+```
+
+Он больше не нужен, потому что очистка переезжает в `common`.
+
+---
+
+## 7.3. Обновить rfm-downloader Main
 
 Файл:
 
@@ -683,148 +1116,35 @@ public final class ZenithProcessorTrigger {
 rfm-downloader/src/main/java/org/ikozmin/rfm/Main.java
 ```
 
-В самый низ класса `Main`, перед последней закрывающей скобкой класса, добавить:
+Заменить импорт:
 
 ```java
-private record PublishedRegistryUpdate(
-        UpdateResult result,
-        PublishedRegistryEvent event
-) {
-}
-```
-
----
-
-### 3.2. В методе run заменить список уведомлений
-
-Найти:
-
-```java
-List<RegistryNotificationItem> notificationItems = new ArrayList<>();
-```
-
-Заменить на:
-
-```java
-List<PublishedRegistryUpdate> publishedUpdates = new ArrayList<>();
-```
-
----
-
-### 3.3. Внутри цикла заменить обработку downloaded
-
-Найти внутри:
-
-```java
-if (result.isDownloaded()) {
-```
-
-и заменить в этом блоке только эту часть:
-
-```java
-PublishedRegistryEvent event = publishRegistryEvent(config, result);
-runZenithProcessorIfNeeded(config, event.file());
-
-Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(config, event.eventId());
-notificationItems.add(new RegistryNotificationItem(result, zenithSummary.orElse(null)));
+import org.ikozmin.rfm.service.EventRetentionService;
 ```
 
 на:
 
 ```java
-PublishedRegistryEvent event = publishRegistryEvent(config, result);
-publishedUpdates.add(new PublishedRegistryUpdate(result, event));
+import org.ikozmin.common.event.EventRetentionService;
 ```
 
-Остальной код блока `if (result.isDownloaded())` оставить как есть.
-
----
-
-### 3.4. После цикла добавить один запуск Zenith и сбор notificationItems
-
-Найти после завершения цикла:
+Найти в методе `applyRetentionIfNeeded`:
 
 ```java
-sendNotificationIfNeeded(config, notificationItems);
-applyRetentionIfNeeded(config, workDir, downloadDir, catalogTypes);
+new EventRetentionService(config.getRetention()).apply(eventRootDir);
 ```
 
 Заменить на:
 
 ```java
-runZenithProcessorIfNeeded(config, publishedUpdates);
-
-List<RegistryNotificationItem> notificationItems = new ArrayList<>();
-
-for (PublishedRegistryUpdate publishedUpdate : publishedUpdates) {
-    Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(
-            config,
-            publishedUpdate.event().eventId()
-    );
-
-    notificationItems.add(new RegistryNotificationItem(
-            publishedUpdate.result(),
-            zenithSummary.orElse(null)
-    ));
-}
-
-sendNotificationIfNeeded(config, notificationItems);
-applyRetentionIfNeeded(config, workDir, downloadDir, catalogTypes);
+new EventRetentionService().apply(eventRootDir);
 ```
+
+Итог: `events/registry-updated/processed`, `failed`, `results` будут храниться 30 дней, затем удаляться.
 
 ---
 
-### 3.5. Заменить метод runZenithProcessorIfNeeded
-
-Найти метод:
-
-```java
-private void runZenithProcessorIfNeeded(AppConfig config, Path eventFile) {
-    ZenithProcessorTrigger trigger = new ZenithProcessorTrigger(config.getZenithTrigger());
-
-    if (!trigger.isEnabled()) {
-        log.info("Zenith trigger is disabled");
-        return;
-    }
-
-    log.info("Zenith trigger enabled. eventFile={}", eventFile.toAbsolutePath());
-    trigger.runOnce();
-}
-```
-
-Заменить на:
-
-```java
-private void runZenithProcessorIfNeeded(AppConfig config, List<PublishedRegistryUpdate> publishedUpdates) {
-    if (publishedUpdates == null || publishedUpdates.isEmpty()) {
-        return;
-    }
-
-    ZenithProcessorTrigger trigger = new ZenithProcessorTrigger(config.getZenithTrigger());
-
-    if (!trigger.isEnabled()) {
-        log.info("Zenith trigger is disabled");
-        return;
-    }
-
-    boolean suppressZenithNotification = config.getZenithTrigger() != null
-            && config.getZenithTrigger().isSuppressNotificationWhenRfmNotificationEnabled()
-            && config.getNotifications() != null
-            && config.getNotifications().isEnabled();
-
-    log.info("Zenith trigger enabled. events={}, suppressNotification={}",
-            publishedUpdates.size(),
-            suppressZenithNotification);
-
-    trigger.runOnce(suppressZenithNotification);
-}
-```
-
-После этого импорт `java.nio.file.Path` остается нужен в `Main`, поэтому его не удалять.
-
----
-
-### 3.6. Изменить команду запуска Zenith в config.template.json
+## 7.4. Обновить rfm-downloader config.template.json
 
 Файл:
 
@@ -835,275 +1155,179 @@ rfm-downloader/config/config.template.json
 В блоке:
 
 ```json
-"ZenithTrigger": {
+"Retention": {
   "Enabled": true,
-  "Command": "run-zenith-once.bat --require-event --mode FULL",
-  "WorkingDirectory": ".",
-  "TimeoutSeconds": 1800
+  "KeepAuditDays": 60,
+  "KeepDownloadedVersions": 10,
+  "KeepProcessedEventDays": 30,
+  "KeepFailedEventDays": 180,
+  "KeepResultEventDays": 30
 }
 ```
 
 заменить на:
 
 ```json
-"ZenithTrigger": {
+"Retention": {
   "Enabled": true,
-  "Command": "run-zenith-drain.bat --mode FULL",
-  "WorkingDirectory": ".",
-  "TimeoutSeconds": 1800,
-  "SuppressNotificationWhenRfmNotificationEnabled": true
+  "KeepAuditDays": 60,
+  "KeepDownloadedVersions": 10
 }
 ```
 
-Почему `drain`, а не `once`:
+Почему убрать event-поля:
 
-1. `once` берет одно событие.
-2. `drain` обрабатывает все события, которые есть в очереди на момент запуска.
-3. Это соответствует сценарию “RFM скачал несколько реестров, Zenith обработал всю пачку”.
+1. Для events принято единое правило 30 дней.
+2. Пользовательский конфиг не должен разрастаться служебными настройками.
+3. Zenith будет использовать тот же срок без отдельного конфига.
 
-Почему без `--require-event`:
-
-1. RFM и так вызывает Zenith только если есть `publishedUpdates`.
-2. Для `drain` отсутствие событий внутри второй итерации является нормальным завершением очереди.
+Поля `KeepProcessedEventDays`, `KeepFailedEventDays`, `KeepResultEventDays` можно оставить в `RetentionConfig` для обратной совместимости, но больше не использовать в новой логике.
 
 ---
 
-## 4. Проверка выгрузки отчета Zenith
-
-### Наблюдение
-
-В текущем `ZenithReportService` папка создается:
-
-```java
-Path outputDir = Path.of(config.getOutputDirectory());
-Files.createDirectories(outputDir);
-```
-
-Если папка не создалась, значит метод, скорее всего, не дошел до этой строки. Типовые причины:
-
-1. Для каталога не найден `Reports.<catalog>` и отчет отключен fallback-конфигом.
-2. Ошибка произошла на `apiClient.createReport(...)`.
-3. Запуск идет из другой рабочей директории, и относительный путь смотрит не туда.
-4. Фильтр не найден, и метод падает на `loadFilterXml()`.
-
-Скрипты `run-rfm.bat` и `run-zenith-drain.bat` уже делают:
-
-```bat
-cd /d "%~dp0"
-```
-
-и задают:
-
-```bat
--Dapp.home="%APP_HOME%"
-```
-
-Но `ZenithReportService` пока не использует `app.home` при разрешении относительных путей. Лучше добавить один локальный resolver.
-
----
-
-### 4.1. Обновить ZenithReportService
+## 7.5. Добавить очистку Zenith events
 
 Файл:
 
 ```text
-zenith-processor/src/main/java/org/ikozmin/zenith/service/ZenithReportService.java
+zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java
 ```
 
-Заменить метод `createAndDownloadReport` полностью:
+Добавить импорт:
 
 ```java
-public ZenithReportResult createAndDownloadReport(String eventId, String catalog, String idXml) {
-    try {
-        LocalDate endDate = LocalDate.now();
-        LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate(catalog)
-                .orElse(endDate);
-
-        String filterXml = config.isFilter() ? loadFilterXml() : null;
-
-        int outDocType = config.getOutDocType();
-
-        log.info("Creating Zenith report. eventId={}, catalog={}, outDocType={}, beginDate={}, endDate={}, filterEnabled={}",
-                eventId,
-                catalog,
-                outDocType,
-                beginDate,
-                endDate,
-                config.isFilter());
-
-        ZenithApiClient.ReportCreateData data = new ZenithApiClient.ReportCreateData(
-                outDocType,
-                ASSIGN_OUT_DOC_NUM,
-                ALL_EMITENTS,
-                beginDate.toString(),
-                endDate.toString()
-        );
-
-        ZenithApiClient.OutDocLink outDoc = apiClient.createReport(
-                data,
-                filterXml
-        );
-
-        Path outputDir = resolveAppPath(config.getOutputDirectory());
-        Files.createDirectories(outputDir);
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy_MM_dd");
-        String fileName = config.getFileNamePrefix()
-                + "_"
-                + beginDate.format(formatter)
-                + "-"
-                + endDate.format(formatter)
-                + "_"
-                + catalog
-                + ".xlsx";
-
-        Path targetFile = outputDir.resolve(fileName);
-
-        log.info("Downloading Zenith report. catalog={}, outDocId={}, targetFile={}",
-                catalog,
-                outDoc.id(),
-                targetFile.toAbsolutePath());
-
-        apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
-
-        stateStore.saveSuccessfulCheck(catalog, endDate, idXml, eventId);
-
-        log.info("Zenith report downloaded. catalog={}, outDocId={}, file={}",
-                catalog,
-                outDoc.id(),
-                targetFile.toAbsolutePath());
-
-        return new ZenithReportResult(targetFile, beginDate, endDate, outDoc.id());
-    } catch (Exception e) {
-        throw new IllegalStateException("Failed to create and download Zenith report. catalog="
-                + catalog
-                + ", outputDirectory="
-                + config.getOutputDirectory(), e);
-    }
-}
+import org.ikozmin.common.event.EventRetentionService;
 ```
 
-Заменить метод `loadFilterXml` полностью:
+### Для once/drain
+
+В методе `call()` найти блок:
 
 ```java
-private String loadFilterXml() throws Exception {
-    Path filterPath = resolveAppPath(config.getFilterTemplatePath());
-
-    if (!Files.isRegularFile(filterPath)) {
-        throw new IllegalStateException("Zenith report filter file not found: "
-                + filterPath.toAbsolutePath());
-    }
-
-    log.info("Loading Zenith report filter: {}", filterPath.toAbsolutePath());
-
-    return Files.readString(filterPath);
+if (drain) {
+    return processDrain(config, workflowMode);
 }
-```
 
-После `loadFilterXml` добавить новый метод:
-
-```java
-private Path resolveAppPath(String value) {
-    Path path = Path.of(value);
-
-    if (path.isAbsolute()) {
-        return path.normalize();
-    }
-
-    String appHome = System.getProperty("app.home");
-
-    if (appHome != null && !appHome.isBlank()) {
-        return Path.of(appHome).resolve(path).normalize();
-    }
-
-    return Path.of(System.getProperty("user.dir")).resolve(path).normalize();
-}
-```
-
-Что это даст:
-
-1. В логе будет видно, какой `outDocType`, даты и фильтр реально ушли в Zenith.
-2. В логе будет абсолютный путь, куда программа пытается сохранить отчет.
-3. Относительные пути будут привязаны к папке приложения, а не к случайной текущей директории процесса.
-
----
-
-## 5. Логи Zenith и “архивирование”
-
-### Важное уточнение
-
-Текущий `logback.xml`:
-
-```xml
-<file>${LOG_FILE}</file>
-<fileNamePattern>${LOG_DIR}/zenith-processor.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
-```
-
-работает штатно для Logback:
-
-1. Активный файл всегда называется `zenith-processor.log`.
-2. При ротации старый активный файл переименовывается в `zenith-processor.2026-07-07.0.log`.
-3. Новый активный файл снова называется `zenith-processor.log`.
-
-То, что после ротации появился `zenith-processor.2026-07-07.0.log` и новый `zenith-processor.log`, само по себе не ошибка. Это нормальная схема rolling file.
-
-Если под “архивированием” нужно именно сжатие старых логов, тогда менять надо только pattern.
-
----
-
-### 5.1. Вариант с gzip-архивами
-
-Файл:
-
-```text
-zenith-processor/src/main/resources/logback.xml
-```
-
-Найти:
-
-```xml
-<fileNamePattern>${LOG_DIR}/zenith-processor.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+return processOnce(config, workflowMode);
 ```
 
 Заменить на:
 
-```xml
-<fileNamePattern>${LOG_DIR}/zenith-processor.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+```java
+try {
+    if (drain) {
+        return processDrain(config, workflowMode);
+    }
+
+    return processOnce(config, workflowMode);
+} finally {
+    applyEventRetention(config);
+}
 ```
 
-Это даст:
+### Для watch
+
+В методе `runWatch` найти блок:
+
+```java
+while (!Thread.currentThread().isInterrupted()) {
+    int exitCode = processOnce(config, workflowMode);
+
+    if (exitCode != 0 && exitCode != 3) {
+        log.warn("Zenith watch iteration finished with non-zero code: {}", exitCode);
+    }
+
+    Thread.sleep(delay.toMillis());
+}
+```
+
+Заменить на:
+
+```java
+while (!Thread.currentThread().isInterrupted()) {
+    int exitCode = processOnce(config, workflowMode);
+
+    if (exitCode != EXIT_OK && exitCode != EXIT_NO_EVENTS) {
+        log.warn("Zenith watch iteration finished with non-zero code: {}", exitCode);
+    }
+
+    applyEventRetention(config);
+
+    Thread.sleep(delay.toMillis());
+}
+```
+
+Почему отдельно для `watch`: этот режим может работать постоянно, поэтому `finally` из `call()` выполнится только при завершении процесса. Для долгоживущего процесса очистку надо запускать после каждой итерации.
+
+После метода `sendNotificationIfNeeded` добавить новый метод:
+
+```java
+private void applyEventRetention(ZenithConfig config) {
+    EventRetentionService retentionService = new EventRetentionService();
+
+    retentionService.apply(Path.of(config.getEvents().getRegistryUpdatedDirectory()));
+
+    for (String directory : config.getEvents().getImportCompletedDirectories()) {
+        retentionService.apply(Path.of(directory));
+    }
+
+    String checkDirectory = config.getEvents().getCheckDirectory();
+
+    if (checkDirectory != null && !checkDirectory.isBlank()) {
+        retentionService.apply(Path.of(checkDirectory));
+    }
+}
+```
+
+Что будет чиститься:
 
 ```text
-logs/zenith-processor.log
-logs/zenith-processor.2026-07-07.0.log.gz
-logs/zenith-processor.2026-07-08.0.log.gz
+events/registry-updated/processed
+events/registry-updated/failed
+events/registry-updated/results
+
+events/zenith-imported/client-main/processed
+events/zenith-imported/client-main/failed
+events/zenith-imported/client-main/results
+
+\\office-server\...\processed
+\\office-server\...\failed
+\\office-server\...\results
 ```
 
-Активный файл `zenith-processor.log` останется. Это удобно для просмотра текущего запуска.
+Если какой-то папки нет, это не ошибка: сервис просто пропустит ее.
 
 ---
 
-### 5.2. Если лог иногда продолжает писаться в старый файл
+## 7.6. Важное замечание по `new` и `processing`
 
-Это обычно происходит не из-за `logback.xml`, а из-за параллельных процессов:
-
-1. Старый процесс стартовал до полуночи и держит файл.
-2. Новый процесс стартовал после полуночи.
-3. Оба пишут в один и тот же набор файлов.
-
-В планировщике Windows для задачи Zenith и RFM проверить настройку:
+Папки:
 
 ```text
-Если задача уже выполняется: не запускать новый экземпляр
+new
+processing
 ```
 
-Если включен режим `watch`, его нельзя запускать каждый час второй копией. Для планировщика лучше использовать `drain`, а `watch` держать как отдельный постоянный сервис только в одном экземпляре.
+специально не чистим автоматически.
+
+Почему:
+
+1. `new` содержит еще не обработанные события. Удалять их по сроку опасно.
+2. `processing` может содержать событие, которое осталось после аварийного завершения. Его лучше разбирать отдельно, а не молча удалять.
+
+Автоматически удаляются только технологические следы завершенной обработки:
+
+```text
+processed
+failed
+results
+```
 
 ---
 
-## 6. Проверка после правок
+# 9. Проверка после правок
 
-### 6.1. Сборка
+## 9.1. Сборка
 
 Из корня проекта:
 
@@ -1111,135 +1335,78 @@ logs/zenith-processor.2026-07-08.0.log.gz
 mvn clean package
 ```
 
----
+## 9.2. Проверка устаревшего списка
 
-### 6.2. Проверка RFM плюс Zenith
-
-В `config/config.json` для центрального запуска:
-
-```json
-"Notifications": {
-  "Enabled": true
-}
-```
-
-и:
-
-```json
-"ZenithTrigger": {
-  "Enabled": true,
-  "Command": "run-zenith-drain.bat --mode FULL",
-  "WorkingDirectory": ".",
-  "TimeoutSeconds": 1800,
-  "SuppressNotificationWhenRfmNotificationEnabled": true
-}
-```
-
-Запуск:
+Запустить:
 
 ```bat
-run-rfm.bat
-```
-
-Ожидаемый результат:
-
-1. Если обновился один реестр, приходит одно итоговое уведомление RFM.
-2. Если обновились несколько реестров, приходит одно итоговое уведомление RFM со всеми реестрами.
-3. Отдельное уведомление от Zenith не приходит, если RFM-уведомление включено.
-4. Summary Zenith подгружается в итоговое RFM-уведомление по каждому event.
-
----
-
-### 6.3. Проверка standalone Zenith
-
-В офисном `config/zenith-config.json`:
-
-```json
-"Notifications": {
-  "Enabled": true
-}
-```
-
-Запуск:
-
-```bat
-run-zenith-drain.bat --mode CHECK_ONLY
-```
-
-Ожидаемый результат:
-
-1. Zenith берет все события из своей `CheckDirectory`.
-2. По каждому событию выполняет проверку.
-3. По каждому событию сохраняет summary.
-4. Если включены уведомления, Zenith отправляет свое standalone-уведомление.
-
----
-
-### 6.4. Проверка антидубля
-
-Сценарий 1:
-
-```text
-RFM Notifications.Enabled=true
-Zenith Notifications.Enabled=true
-Запуск через run-rfm.bat
-```
-
-Ожидание:
-
-```text
-Приходит только итоговое уведомление RFM.
-Zenith standalone-уведомление подавлено флагом --suppress-notification.
-```
-
-Сценарий 2:
-
-```text
-RFM Notifications.Enabled=false
-Zenith Notifications.Enabled=true
-Запуск через run-rfm.bat
-```
-
-Ожидание:
-
-```text
-RFM не отправляет уведомление.
-Zenith может отправить standalone-уведомление, потому что suppress-флаг не добавляется.
-```
-
-Сценарий 3:
-
-```text
-Офисный запуск run-zenith-drain.bat --mode CHECK_ONLY
-Zenith Notifications.Enabled=true
-```
-
-Ожидание:
-
-```text
-Zenith отправляет уведомление.
-```
-
----
-
-## 7. Что уже не надо делать
-
-Не надо возвращать старую схему:
-
-```text
-run-zenith-once.bat --require-event --mode FULL
-```
-
-для запуска из RFM. Для центрального запуска с несколькими реестрами нужен:
-
-```text
 run-zenith-drain.bat --mode FULL
 ```
 
-Не надо оставлять два разных builder-а текста Zenith. Один источник текста должен быть в:
+Ожидаемо:
 
 ```text
-common/src/main/java/org/ikozmin/common/notification/ZenithNotificationTextBuilder.java
+Zenith вернул “список неактуален”
+событие перешло в processed
+summary сохранен как skipped
+drain продолжил следующие события
+код завершения drain = 0
 ```
 
-Не надо включать центральные Zenith-уведомления как основной механизм, если RFM уже отправляет итоговое уведомление. Центральный Zenith может иметь уведомления включенными в конфиге, но при запуске из RFM они должны подавляться через `--suppress-notification`.
+## 9.3. Проверка пустого отчета
+
+Если в XLSX нет листа:
+
+```text
+Таблица_Проверок
+```
+
+Ожидаемо:
+
+```text
+ошибки нет
+summary: processed=true, totalPersons=0, newPersons=0
+уведомление: новых лиц не найдено
+```
+
+## 9.4. Проверка ошибки одного события
+
+Искусственно положить одно некорректное событие и одно корректное.
+
+Ожидаемо:
+
+```text
+некорректное событие -> failed
+корректное событие -> processed
+drain не остановился на первом сбое
+```
+
+## 9.5. Проверка логов
+
+После сборки и запуска Zenith формат должен стать таким:
+
+```text
+2026-07-10 12:00:00 INFO  - Zenith drain completed. processedEvents=2, failedEvents=1
+```
+
+Без:
+
+```text
+org.ikozmin.zenith.ZenithProcessorMain
+```
+
+## 9.6. Проверка retention events
+
+После истечения 30 дней старые файлы должны удаляться из:
+
+```text
+events/registry-updated/processed
+events/registry-updated/failed
+events/registry-updated/results
+
+events/zenith-imported/.../processed
+events/zenith-imported/.../failed
+events/zenith-imported/.../results
+```
+
+Папки `new` и `processing` автоматически не удаляются.

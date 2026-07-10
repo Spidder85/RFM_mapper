@@ -3,6 +3,9 @@ package org.ikozmin.common.notification;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Готовое уведомление: тема и человекочитаемый текст.
+ */
 public record NotificationMessage(
         String subject,
         String body,

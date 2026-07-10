@@ -3,6 +3,9 @@ package org.ikozmin.common.event;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Краткий результат обработки события в Zenith для уведомлений и связи RFM с Zenith.
+ */
 public record ZenithProcessingSummary(
         String eventId,
         boolean processed,
