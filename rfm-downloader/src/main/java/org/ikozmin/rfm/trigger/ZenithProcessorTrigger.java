@@ -21,7 +21,7 @@ public final class ZenithProcessorTrigger {
         return config != null && config.isEnabled();
     }
 
-    public void runOnce() {
+    public void runOnce(boolean suppressNotification) {
         if (!isEnabled()) {
             return;
         }
@@ -32,19 +32,17 @@ public final class ZenithProcessorTrigger {
 
         try {
             Path workingDirectory = resolveWorkingDirectory(config.getWorkingDirectory());
-
-            //List<String> command = parseCommand(config.getCommand());
+            String command = buildCommand(config.getCommand(), suppressNotification);
 
             log.info("Starting zenith processor. workingDirectory={}, command={}",
                     workingDirectory,
-                    config.getCommand());
-
+                    command);
 
             Process process = new ProcessBuilder(
                     "cmd.exe",
                     "/d",
                     "/c",
-                    config.getCommand()
+                    command
             )
                     .directory(workingDirectory.toFile())
                     .inheritIO()
@@ -68,6 +66,18 @@ public final class ZenithProcessorTrigger {
         }
     }
 
+    private String buildCommand(String baseCommand, boolean suppressNotification) {
+        if (!suppressNotification) {
+            return baseCommand;
+        }
+
+        if (baseCommand.contains("--suppress-notification")) {
+            return baseCommand;
+        }
+
+        return baseCommand + " --suppress-notification";
+    }
+
     private Path resolveWorkingDirectory(String value) {
         Path path = Path.of(value);
 
@@ -83,17 +93,4 @@ public final class ZenithProcessorTrigger {
 
         return Path.of(System.getProperty("user.dir")).resolve(path).normalize();
     }
-
-//    private List<String> parseCommand(String commandLine) {
-//        String[] parts = commandLine.trim().split("\\s+");
-//        List<String> result = new ArrayList<>();
-//
-//        for (String part : parts) {
-//            if (!part.isBlank()) {
-//                result.add(part);
-//            }
-//        }
-//
-//        return result;
-//    }
 }

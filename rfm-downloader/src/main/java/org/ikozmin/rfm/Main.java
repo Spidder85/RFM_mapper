@@ -145,7 +145,7 @@ public final class Main implements Callable<Integer> {
             catalogMapping
         );
 
-        List<RegistryNotificationItem> notificationItems = new ArrayList<>();
+        List<PublishedRegistryUpdate> publishedUpdates = new ArrayList<>();
 
         for (CatalogType catalogType : catalogTypes) {
             UpdateResult result = retryPolicy.execute(
@@ -163,10 +163,7 @@ public final class Main implements Callable<Integer> {
                         result.fileSize());
 
                 PublishedRegistryEvent event = publishRegistryEvent(config, result);
-                runZenithProcessorIfNeeded(config, event.file());
-
-                Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(config, event.eventId());
-                notificationItems.add(new RegistryNotificationItem(result, zenithSummary.orElse(null)));
+                publishedUpdates.add(new PublishedRegistryUpdate(result, event));
 
                 System.out.println("UPDATED " + result.catalogType().getCode() + " " + result.file().toAbsolutePath());
             } else {
@@ -181,6 +178,22 @@ public final class Main implements Callable<Integer> {
                     System.out.println("CURRENT_FILE " + result.catalogType().getCode() + " " + result.file().toAbsolutePath());
                 }
             }
+        }
+
+        runZenithProcessorIfNeeded(config, publishedUpdates);
+
+        List<RegistryNotificationItem> notificationItems = new ArrayList<>();
+
+        for (PublishedRegistryUpdate publishedUpdate : publishedUpdates) {
+            Optional<ZenithProcessingSummary> zenithSummary = loadZenithSummary(
+                    config,
+                    publishedUpdate.event().eventId()
+            );
+
+            notificationItems.add(new RegistryNotificationItem(
+                    publishedUpdate.result(),
+                    zenithSummary.orElse(null)
+            ));
         }
 
         sendNotificationIfNeeded(config, notificationItems);
@@ -203,7 +216,11 @@ public final class Main implements Callable<Integer> {
         return publishedEvent;
     }
 
-    private void runZenithProcessorIfNeeded(AppConfig config, Path eventFile) {
+    private void runZenithProcessorIfNeeded(AppConfig config, List<PublishedRegistryUpdate> publishedUpdates) {
+        if (publishedUpdates == null || publishedUpdates.isEmpty()) {
+            return;
+        }
+
         ZenithProcessorTrigger trigger = new ZenithProcessorTrigger(config.getZenithTrigger());
 
         if (!trigger.isEnabled()) {
@@ -211,8 +228,15 @@ public final class Main implements Callable<Integer> {
             return;
         }
 
-        log.info("Zenith trigger enabled. eventFile={}", eventFile.toAbsolutePath());
-        trigger.runOnce();
+        boolean suppressZenithNotification = config.getZenithTrigger() != null
+                && config.getZenithTrigger().isSuppressNotificationWhenRfmNotificationEnabled()
+                && config.getNotifications() != null
+                && config.getNotifications().isEnabled();
+
+        log.info("Zenith trigger enabled. events={}, suppressNotification={}",
+                publishedUpdates.size(),
+                suppressZenithNotification);
+        trigger.runOnce(suppressZenithNotification);
     }
 
     private Path resolveDownloadDir(AppConfig config) {
@@ -343,5 +367,11 @@ public final class Main implements Callable<Integer> {
         }
 
         return Contour.from(config.isUseTestContour());
+    }
+
+    private record PublishedRegistryUpdate(
+            UpdateResult result,
+            PublishedRegistryEvent event
+    ) {
     }
 }

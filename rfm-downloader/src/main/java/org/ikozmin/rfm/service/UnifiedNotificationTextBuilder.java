@@ -2,6 +2,7 @@ package org.ikozmin.rfm.service;
 
 import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.common.notification.NotificationMessage;
+import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
 import org.ikozmin.rfm.model.CatalogType;
 
 import java.nio.file.Files;
@@ -11,6 +12,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public final class UnifiedNotificationTextBuilder {
+    private final ZenithNotificationTextBuilder zenithTextBuilder = new ZenithNotificationTextBuilder();
+
     public NotificationMessage build(
             List<RegistryNotificationItem> items
     ) throws Exception {
@@ -35,8 +38,14 @@ public final class UnifiedNotificationTextBuilder {
                 .append(System.lineSeparator());
         body.append(System.lineSeparator());
 
-        for (RegistryNotificationItem item : items) {
+        for (int i = 0; i < items.size(); i++) {
+            RegistryNotificationItem item = items.get(i);
             UpdateResult result = item.result();
+
+            body.append(i + 1)
+                    .append(". ")
+                    .append(displayCatalogName(result.catalogType().getCode()))
+                    .append(System.lineSeparator());
 
             body.append(indent).append("Предыдущий idXml: ")
                     .append(result.oldIdXml() == null ? "отсутствует" : result.oldIdXml())
@@ -64,7 +73,8 @@ public final class UnifiedNotificationTextBuilder {
                         .append(System.lineSeparator());
             }
 
-            appendZenithBlock(body, indent, item.zenithSummary());
+            // zenith appendZenithBlock(body, indent, item.zenithSummary());
+            zenithTextBuilder.appendEmbeddedBlock(body, indent, item.zenithSummary());
             body.append(System.lineSeparator());
         }
         body.append("Это автоматическое уведомление. Не надо на него отвечать.").append(System.lineSeparator());
@@ -93,63 +103,6 @@ public final class UnifiedNotificationTextBuilder {
         );
 
         return build(List.of(new RegistryNotificationItem(result, zenithSummary)));
-    }
-
-    private void appendZenithBlock(StringBuilder body, String indent, ZenithProcessingSummary zenithSummary) {
-        body.append(System.lineSeparator());
-        body.append(indent).append("Проверка в Zenith").append(System.lineSeparator());
-
-        if (zenithSummary == null) {
-            body.append(indent).append(indent)
-                    .append("Результат Zenith недоступен. Проверьте журнал zenith-processor и каталог events.")
-                    .append(System.lineSeparator());
-            return;
-        }
-
-        if (zenithSummary.newPersons() == 0) {
-            body.append(indent).append(indent)
-                    .append("Новых лиц не найдено.")
-                    .append(System.lineSeparator());
-            body.append(indent).append(indent)
-                    .append("Всего совпадений в отчете: ")
-                    .append(zenithSummary.totalPersons())
-                    .append(System.lineSeparator());
-            return;
-        }
-
-        body.append(indent).append(indent)
-                .append("Найдены новые лица: ")
-                .append(zenithSummary.newPersons())
-                .append(System.lineSeparator());
-
-        int index = 1;
-        for (ZenithProcessingSummary.Person person : zenithSummary.persons()) {
-            body.append(indent).append(indent)
-                    .append(index++)
-                    .append(". ")
-                    .append(blankToDash(person.displayName()))
-                    .append(System.lineSeparator());
-            body.append(indent).append(indent).append(indent)
-                    .append("Номер счета: ")
-                    .append(blankToDash(person.accountNumber()))
-                    .append(System.lineSeparator());
-            body.append(indent).append(indent).append(indent)
-                    .append("Организация: ")
-                    .append(blankToDash(person.emitentName()))
-                    .append(System.lineSeparator());
-            body.append(indent).append(indent).append(indent)
-                    .append("Черновики ФЭС: ")
-                    .append(person.packageDirectory() == null ? "-" : person.packageDirectory())
-                    .append(System.lineSeparator());
-        }
-        body.append(System.lineSeparator());
-
-        body.append(indent).append(indent)
-                .append("Автоматическая отправка в Росфинмониторинг не выполнялась.")
-                .append(System.lineSeparator());
-        body.append(indent).append(indent)
-                .append("Необходимо проверить подготовленные черновики и принять решение вручную.")
-                .append(System.lineSeparator());
     }
 
     private long safeFileSize(Path file) {

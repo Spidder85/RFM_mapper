@@ -41,6 +41,14 @@ public final class ZenithReportService {
 
             int outDocType = config.getOutDocType();
 
+            log.info("Creating Zenith report. eventId={}, catalog={}, outDocType={}, beginDate={}, endDate={}, filterEnabled={}",
+                    eventId,
+                    catalog,
+                    outDocType,
+                    beginDate,
+                    endDate,
+                    config.isFilter());
+
             ZenithApiClient.ReportCreateData data = new ZenithApiClient.ReportCreateData(
                     outDocType,
                     ASSIGN_OUT_DOC_NUM,
@@ -54,7 +62,7 @@ public final class ZenithReportService {
                     filterXml
             );
 
-            Path outputDir = Path.of(config.getOutputDirectory());
+            Path outputDir = resolveAppPath(config.getOutputDirectory());
             Files.createDirectories(outputDir);
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy_MM_dd");
@@ -69,6 +77,11 @@ public final class ZenithReportService {
 
             Path targetFile = outputDir.resolve(fileName);
 
+            log.info("Downloading Zenith report. catalog={}, outDocId={}, targetFile={}",
+                    catalog,
+                    outDoc.id(),
+                    targetFile.toAbsolutePath());
+
             apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
 
             stateStore.saveSuccessfulCheck(catalog, endDate, idXml, eventId);
@@ -80,18 +93,39 @@ public final class ZenithReportService {
 
             return new ZenithReportResult(targetFile, beginDate, endDate, outDoc.id());
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to create and download Zenith report", e);
+            throw new IllegalStateException("Failed to create and download Zenith report. catalog="
+                    + catalog
+                    + ", outputDirectory="
+                    + config.getOutputDirectory(), e);
         }
     }
 
     private String loadFilterXml() throws Exception {
-        Path filterPath = Path.of(config.getFilterTemplatePath());
+        Path filterPath = resolveAppPath(config.getFilterTemplatePath());
 
         if (!Files.isRegularFile(filterPath)) {
             throw new IllegalStateException("Zenith report filter file not found: "
                     + filterPath.toAbsolutePath());
         }
 
+        log.info("Loading Zenith report filter: {}", filterPath.toAbsolutePath());
+
         return Files.readString(filterPath);
+    }
+
+    private Path resolveAppPath(String value) {
+        Path path = Path.of(value);
+
+        if (path.isAbsolute()) {
+            return path.normalize();
+        }
+
+        String appHome = System.getProperty("app.home");
+
+        if (appHome != null && !appHome.isBlank()) {
+            return Path.of(appHome).resolve(path).normalize();
+        }
+
+        return Path.of(System.getProperty("user.dir")).resolve(path).normalize();
     }
 }

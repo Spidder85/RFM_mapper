@@ -17,6 +17,9 @@ public final class ZenithTriggerConfig {
     @JsonProperty("TimeoutSeconds")
     private Integer timeoutSeconds;
 
+    @JsonProperty("SuppressNotificationWhenRfmNotificationEnabled")
+    private Boolean suppressNotificationWhenRfmNotificationEnabled;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -33,5 +36,10 @@ public final class ZenithTriggerConfig {
 
     public Integer getTimeoutSeconds() {
         return timeoutSeconds == null ? 1000 : timeoutSeconds;
+    }
+
+    public boolean isSuppressNotificationWhenRfmNotificationEnabled() {
+        return suppressNotificationWhenRfmNotificationEnabled == null
+                || suppressNotificationWhenRfmNotificationEnabled;
     }
 }

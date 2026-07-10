@@ -9,7 +9,7 @@ import org.ikozmin.common.notification.NotificationMessage;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.config.ZenithWorkflowMode;
-import org.ikozmin.zenith.notification.ZenithNotificationTextBuilder;
+import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
 import org.ikozmin.zenith.service.ZenithWorkflowService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +50,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
     @Option(names = "--retry-failed", description = "Move one failed event back to new queue before processing")
     private boolean retryFailed;
+
+    @Option(names = "--suppress-notification", description = "Do not send Zenith notification for this run")
+    private boolean suppressNotification;
 
     public static void main(String[] args) {
         int exitCode = new CommandLine(new ZenithProcessorMain()).execute(args);
@@ -229,13 +232,18 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     }
 
     private void sendNotificationIfNeeded(ZenithConfig config, String catalog, ZenithProcessingSummary summary) {
+        if (suppressNotification) {
+            log.info("Zenith notification is suppressed by command line option");
+            return;
+        }
+
         NotificationDispatcher dispatcher = new NotificationDispatcher(config.getNotifications());
 
         if (!dispatcher.isEnabled()) {
             return;
         }
 
-        NotificationMessage message = new ZenithNotificationTextBuilder().build(catalog, summary);
+        NotificationMessage message = new ZenithNotificationTextBuilder().buildStandalone(catalog, summary);
         dispatcher.send(message);
     }
 }
