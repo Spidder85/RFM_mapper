@@ -12,6 +12,7 @@ import org.ikozmin.zenith.person.FoundPersonsStore;
 import org.ikozmin.zenith.report.ZenithReportAnalysis;
 import org.ikozmin.zenith.report.ZenithReportAnalyzer;
 import org.ikozmin.zenith.report.ZenithReportPerson;
+import org.ikozmin.zenith.client.ZenithApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,7 +39,16 @@ public final class ZenithWorkflowService {
                 event.catalog(),
                 event.registryFile());
 
-        importPersonListIfEnabled(event);
+        boolean imported = importPersonListIfEnabled(event);
+
+        if (!imported) {
+            return ZenithProcessingSummary.skipped(
+                    event.eventId(),
+                    "Реестр не импортирован в Zenith: в Zenith уже загружен более актуальный список. Каталог: "
+                            + event.catalog()
+            );
+        }
+
         new ZenithImportEventPublisher(config.getEvents()).publish(event);
         runMassCheckIfEnabled(event.catalog());
 
@@ -59,7 +69,16 @@ public final class ZenithWorkflowService {
                 event.catalog(),
                 event.registryFile());
 
-        importPersonListIfEnabled(event);
+        boolean imported = importPersonListIfEnabled(event);
+
+        if (!imported) {
+            return ZenithProcessingSummary.skipped(
+                    event.eventId(),
+                    "Реестр не импортирован в Zenith: в Zenith уже загружен более актуальный список. Каталог: "
+                            + event.catalog()
+            );
+        }
+
         new ZenithImportEventPublisher(config.getEvents()).publish(event);
 
         return new ZenithProcessingSummary(
@@ -93,12 +112,12 @@ public final class ZenithWorkflowService {
         return summary;
     }
 
-    private void importPersonListIfEnabled(RegistryUpdatedEvent event) {
+    private boolean importPersonListIfEnabled(RegistryUpdatedEvent event) {
         ZenithConfig.Import importConfig = config.getZenith().getImportConfig();
 
         if (importConfig != null && !importConfig.isEnabled()) {
             log.info("Zenith import step is disabled");
-            return;
+            return true;
         }
 
         ZenithImportFormatResolver.ImportFormat importFormat = importFormatResolver.resolve(
@@ -106,12 +125,25 @@ public final class ZenithWorkflowService {
                 importConfig
         );
 
-        apiClient.importPersonList(
-                event.registryFile(),
-                importFormat.fileFormat(),
-                importFormat.listCategory(),
-                false
-        );
+        try {
+            apiClient.importPersonList(
+                    event.registryFile(),
+                    importFormat.fileFormat(),
+                    importFormat.listCategory(),
+                    false
+            );
+        } catch (ZenithApiException e) {
+            if (e.isObsoletePersonListImport()) {
+                log.warn("Registry list is obsolete for Zenith and will be skipped. eventId={}, catalog={}, file={}, apiMessage={}",
+                        event.eventId(),
+                        event.catalog(),
+                        event.registryFile(),
+                        e.body());
+                return false;
+            }
+
+            throw e;
+        }
 
         log.info("Registry list imported into Zenith. eventId={}, catalog={}, fileFormat={}, listCategory={}, file={}",
                 event.eventId(),
@@ -119,6 +151,8 @@ public final class ZenithWorkflowService {
                 importFormat.fileFormat(),
                 importFormat.listCategory() == null ? "<not required>" : importFormat.listCategory(),
                 event.registryFile());
+
+        return true;
     }
 
     private void runMassCheckIfEnabled(String catalog) {

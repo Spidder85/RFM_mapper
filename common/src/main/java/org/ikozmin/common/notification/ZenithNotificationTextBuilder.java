@@ -51,6 +51,25 @@ public final class ZenithNotificationTextBuilder {
             return;
         }
 
+        if (!summary.processed()) {
+            body.append(indent)
+                    .append("Проверка в Zenith завершилась ошибкой.")
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("Причина: ")
+                    .append(value(summary.message()))
+                    .append(lineSeparator);
+            return;
+        }
+
+        if (summary.reportFile() == null && summary.totalPersons() == 0 && summary.newPersons() == 0
+                && summary.message() != null && !summary.message().isBlank()) {
+            body.append(indent)
+                    .append(summary.message())
+                    .append(lineSeparator);
+            return;
+        }
+
         if (summary.reportFile() != null) {
             body.append(indent)
                     .append("Отчет: ")

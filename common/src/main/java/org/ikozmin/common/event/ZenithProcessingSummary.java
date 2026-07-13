@@ -29,6 +29,32 @@ public record ZenithProcessingSummary(
         );
     }
 
+    public static ZenithProcessingSummary skipped(String eventId, String message) {
+        return new ZenithProcessingSummary(
+                eventId,
+                true,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                message
+        );
+    }
+
+    public static ZenithProcessingSummary failed(String eventId, String message) {
+        return new ZenithProcessingSummary(
+                eventId,
+                false,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                message
+        );
+    }
+
     public static ZenithProcessingSummary noNewPersons(String eventId, Path reportFile, int totalPersons) {
         return new ZenithProcessingSummary(
                 eventId,

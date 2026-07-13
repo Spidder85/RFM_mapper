@@ -11,6 +11,7 @@ import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.config.ZenithWorkflowMode;
 import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
 import org.ikozmin.zenith.service.ZenithWorkflowService;
+import org.ikozmin.common.event.EventRetentionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -29,6 +30,10 @@ import java.util.concurrent.Callable;
 )
 public final class ZenithProcessorMain implements Callable<Integer> {
     private static final Logger log = LoggerFactory.getLogger(ZenithProcessorMain.class);
+    private static final int EXIT_OK = 0;
+    private static final int EXIT_PROGRAM_ERROR = 1;
+    private static final int EXIT_EVENT_FAILED = 2;
+    private static final int EXIT_NO_EVENTS = 3;
 
     @Option(names = {"-c", "--config"}, description = "Path to zenith config")
     private Path configPath = Path.of("config", "zenith-config.json");
@@ -70,15 +75,19 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                 return 0;
             }
 
-            if (drain) {
-                return processDrain(config, workflowMode);
-            }
+            try {
+                if (drain) {
+                    return processDrain(config, workflowMode);
+                }
 
-            return processOnce(config, workflowMode);
+                return processOnce(config, workflowMode);
+            } finally {
+                applyEventRetention(config);
+            }
         } catch (Exception e) {
             log.error("Zenith processor failed: {}", e.getMessage(), e);
             System.err.println("Zenith processor failed: " + e.getMessage());
-            return 1;
+            return EXIT_PROGRAM_ERROR;
         }
     }
 
@@ -92,9 +101,11 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         while (!Thread.currentThread().isInterrupted()) {
             int exitCode = processOnce(config, workflowMode);
 
-            if (exitCode != 0 && exitCode != 3) {
+            if (exitCode != EXIT_OK && exitCode != EXIT_NO_EVENTS) {
                 log.warn("Zenith watch iteration finished with non-zero code: {}", exitCode);
             }
+
+            applyEventRetention(config);
 
             Thread.sleep(delay.toMillis());
         }
@@ -102,16 +113,22 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
     private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
         int processed = 0;
+        int failed = 0;
 
         while (true) {
             int exitCode = processOnce(config, workflowMode, false);
 
-            if (exitCode == 3) {
+            if (exitCode == EXIT_NO_EVENTS) {
                 log.info("Zenith drain completed. processedEvents={}", processed);
-                return 0;
+                return EXIT_OK;
             }
 
-            if (exitCode != 0) {
+            if (exitCode == EXIT_EVENT_FAILED) {
+                failed++;
+                continue;
+            }
+
+            if (exitCode != EXIT_OK) {
                 return exitCode;
             }
 
@@ -145,7 +162,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
             if (requeued.isEmpty()) {
                 log.info("No failed registry update events found");
-                return 0;
+                return EXIT_OK;
             }
 
             log.info("Failed event requeued: {}", requeued.get().toAbsolutePath());
@@ -165,15 +182,25 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                     : workflowService.processFull(claimedEvent.get().event());
 
             saveSummary(config, summary);
+
             if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
                 sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
             }
+
             consumer.markProcessed(claimedEvent.get());
 
-            return 0;
+            return EXIT_OK;
         } catch (Exception e) {
+            log.error("Zenith registry event failed. eventId={}, catalog={}, error={}",
+                    claimedEvent.get().event().eventId(),
+                    claimedEvent.get().event().catalog(),
+                    e.getMessage(),
+                    e);
+
+            saveFailureSummary(config, claimedEvent.get().event().eventId(), e);
             consumer.markFailed(claimedEvent.get());
-            throw e;
+
+            return EXIT_EVENT_FAILED;
         }
     }
 
@@ -195,10 +222,19 @@ public final class ZenithProcessorMain implements Callable<Integer> {
             sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
             consumer.markProcessed(claimedEvent.get());
 
-            return 0;
+            return EXIT_OK;
         } catch (Exception e) {
+            log.error("Zenith check event failed. eventId={}, sourceEventId={}, catalog={}, error={}",
+                    claimedEvent.get().event().eventId(),
+                    claimedEvent.get().event().sourceEventId(),
+                    claimedEvent.get().event().catalog(),
+                    e.getMessage(),
+                    e);
+
+            saveFailureSummary(config, claimedEvent.get().event().sourceEventId(), e);
             consumer.markFailed(claimedEvent.get());
-            throw e;
+
+            return EXIT_EVENT_FAILED;
         }
     }
 
@@ -206,11 +242,11 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         if (requireEventForIteration) {
             log.error("No events found, but event is required");
             System.err.println("No events found, but event is required");
-            return 3;
+            return EXIT_NO_EVENTS;
         }
 
         log.info("No events found");
-        return 3;
+        return EXIT_NO_EVENTS;
     }
 
     private void saveSummary(ZenithConfig config, ZenithProcessingSummary summary) {
@@ -221,6 +257,21 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         Path summaryFile = summaryStore.save(summary);
 
         log.info("Zenith summary saved: {}", summaryFile.toAbsolutePath());
+    }
+
+    private void saveFailureSummary(ZenithConfig config, String eventId, Exception e) {
+        try {
+            ZenithProcessingSummary summary = ZenithProcessingSummary.failed(
+                    eventId,
+                    "Ошибка обработки события Zenith: " + e.getMessage()
+            );
+
+            saveSummary(config, summary);
+        } catch (Exception summaryError) {
+            log.warn("Failed to save failure summary. eventId={}, error={}",
+                    eventId,
+                    summaryError.getMessage());
+        }
     }
 
     private ZenithWorkflowMode resolveMode(ZenithConfig config) {
@@ -245,5 +296,21 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
         NotificationMessage message = new ZenithNotificationTextBuilder().buildStandalone(catalog, summary);
         dispatcher.send(message);
+    }
+
+    private void applyEventRetention(ZenithConfig config) {
+        EventRetentionService retentionService = new EventRetentionService();
+
+        retentionService.apply(Path.of(config.getEvents().getRegistryUpdatedDirectory()));
+
+        for (String directory : config.getEvents().getImportCompletedDirectories()) {
+            retentionService.apply(Path.of(directory));
+        }
+
+        String checkDirectory = config.getEvents().getCheckDirectory();
+
+        if (checkDirectory != null && !checkDirectory.isBlank()) {
+            retentionService.apply(Path.of(checkDirectory));
+        }
     }
 }

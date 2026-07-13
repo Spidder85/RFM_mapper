@@ -18,7 +18,7 @@ import org.ikozmin.rfm.event.RegistryEventService;
 import org.ikozmin.common.logging.Masking;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.Contour;
-import org.ikozmin.rfm.service.EventRetentionService;
+import org.ikozmin.common.event.EventRetentionService;
 import org.ikozmin.common.notification.NotificationDispatcher;
 import org.ikozmin.rfm.service.RegistryNotificationItem;
 import org.ikozmin.rfm.service.RegistryUpdateService;
@@ -304,7 +304,7 @@ public final class Main implements Callable<Integer> {
                 : config.getEvents().getDirectory()
         );
 
-        new EventRetentionService(config.getRetention()).apply(eventRootDir);
+        new EventRetentionService().apply(eventRootDir);
     }
 
     private Optional<ZenithProcessingSummary> loadZenithSummary(AppConfig config, String eventId) {

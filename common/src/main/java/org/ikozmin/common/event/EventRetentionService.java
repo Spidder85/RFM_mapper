@@ -1,6 +1,5 @@
-package org.ikozmin.rfm.service;
+package org.ikozmin.common.event;
 
-import org.ikozmin.rfm.config.RetentionConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -8,31 +7,41 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.stream.Stream;
 
 public final class EventRetentionService {
     private static final Logger log = LoggerFactory.getLogger(EventRetentionService.class);
 
-    private final RetentionConfig config;
+    public static final int DEFAULT_KEEP_DAYS = 30;
 
-    public EventRetentionService(RetentionConfig config) {
-        this.config = config;
+    private static final List<String> EVENT_SUBDIRECTORIES = List.of(
+            "processed",
+            "failed",
+            "results"
+    );
+
+    private final int keepDays;
+
+    public EventRetentionService() {
+        this(DEFAULT_KEEP_DAYS);
     }
 
-    public boolean isEnabled() {
-        return config != null && config.isEnabled();
+    public EventRetentionService(int keepDays) {
+        this.keepDays = Math.max(1, keepDays);
     }
 
     public void apply(Path eventRootDir) {
-        if (!isEnabled()) {
+        if (eventRootDir == null) {
             return;
         }
-        clean(eventRootDir.resolve("processed"), config.getKeepProcessedEventDays());
-        clean(eventRootDir.resolve("results"), config.getKeepResultEventDays());
-        clean(eventRootDir.resolve("failed"), config.getKeepFailedEventDays());
+
+        for (String subdirectory : EVENT_SUBDIRECTORIES) {
+            clean(eventRootDir.resolve(subdirectory));
+        }
     }
 
-    private void clean(Path directory, int keepDays) {
+    private void clean(Path directory) {
         if (!Files.isDirectory(directory)) {
             return;
         }
@@ -42,26 +51,30 @@ public final class EventRetentionService {
         try (Stream<Path> files = Files.list(directory)) {
             files
                     .filter(Files::isRegularFile)
-                    .filter(file -> isOlderThen(file, threshold))
+                    .filter(file -> isOlderThan(file, threshold))
                     .forEach(this::deleteQuietly);
         } catch (Exception e) {
-            log.warn("Event retention failed. dir={}, error={}", directory, e.getMessage());
+            log.warn("Event retention failed. dir={}, keepDays={}, error={}",
+                    directory,
+                    keepDays,
+                    e.getMessage());
         }
     }
 
-    private boolean isOlderThen(Path file, Instant threshold) {
+    private boolean isOlderThan(Path file, Instant threshold) {
         try {
             return Files.getLastModifiedTime(file).toInstant().isBefore(threshold);
         } catch (Exception e) {
             return false;
         }
     }
+
     private void deleteQuietly(Path file) {
         try {
             Files.deleteIfExists(file);
-            log.info("Event retention deleted file: {}", file.toAbsolutePath());
+            log.info("Old event file deleted. file={}", file.toAbsolutePath());
         } catch (Exception e) {
-            log.warn("Failed to delete event file by retention. file={}, error={}",
+            log.warn("Failed to delete old event file. file={}, error={}",
                     file,
                     e.getMessage());
         }

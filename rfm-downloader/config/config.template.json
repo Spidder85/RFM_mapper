@@ -25,10 +25,7 @@
   "Retention": {
     "Enabled": true,
     "KeepAuditDays": 60,
-    "KeepDownloadedVersions": 10,
-    "KeepProcessedEventDays": 30,
-    "KeepFailedEventDays": 180,
-    "KeepResultEventDays": 30
+    "KeepDownloadedVersions": 10
   },
   "Notifications": {
     "Enabled": false,

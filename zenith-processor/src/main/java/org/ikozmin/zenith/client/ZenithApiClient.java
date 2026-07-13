@@ -28,32 +28,36 @@ public final class ZenithApiClient {
 
     // Загрузка списка лиц в Zenith
     public void importPersonList(Path file, String fileFormat, String listCategory, boolean append) {
+        if (file == null || !Files.isRegularFile(file)) {
+            throw new IllegalArgumentException("Person list file not found: " + file);
+        }
+
+        StringBuilder query = new StringBuilder()
+                .append("?file_format=")
+                .append(encode(fileFormat))
+                .append("&append=")
+                .append(append);
+
+        if (listCategory != null && !listCategory.isBlank()) {
+            query.append("&list_category=").append(encode(listCategory));
+        }
+
+        URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists" + query);
+
+        HttpRequest.BodyPublisher bodyPublisher;
+
         try {
-            if (file == null || !Files.isRegularFile(file)) {
-                throw new IllegalArgumentException("Person list file not found: " + file);
-            }
-
-            StringBuilder query = new StringBuilder()
-                    .append("?file_format=")
-                    .append(encode(fileFormat))
-                    .append("&append=")
-                    .append(append);
-
-            if (listCategory != null && !listCategory.isBlank()) {
-                query.append("&list_category=").append(encode(listCategory));
-            }
-
-            URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists" + query);
-
-            HttpRequest request = base(uri)
-                    .header("Content-Type", "application/octet-stream")
-                    .POST(HttpRequest.BodyPublishers.ofFile(file))
-                    .build();
-
-            sendNoBody(request, "import person list");
+            bodyPublisher = HttpRequest.BodyPublishers.ofFile(file);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to prepare person list import request. file=" + file, e);
         }
+
+        HttpRequest request = base(uri)
+                .header("Content-Type", "application/octet-stream")
+                .POST(bodyPublisher)
+                .build();
+
+        sendNoBody(request, "import person list");
     }
 
     // Запуск массовой проверки
@@ -162,6 +166,8 @@ public final class ZenithApiClient {
 
             validate(response.statusCode(), operation, response.body());
             return response.body();
+        } catch (ZenithApiException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Zenith API call failed: " + operation, e);
         }
@@ -176,6 +182,8 @@ public final class ZenithApiClient {
             );
 
             validate(response.statusCode(), operation, response.body());
+        } catch (ZenithApiException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Zenith API call failed: " + operation, e);
         }
@@ -187,12 +195,7 @@ public final class ZenithApiClient {
             return;
         }
 
-        throw new IllegalStateException("Zenith API error. operation="
-                + operation
-                + ", status="
-                + status
-                + ", body="
-                + body);
+        throw new ZenithApiException(operation, status, body);
     }
 
     // формирование URI для Zenith API

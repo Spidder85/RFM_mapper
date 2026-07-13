@@ -37,7 +37,11 @@ public final class ZenithReportAnalyzer {
 
             Sheet sheet = workbook.getSheet(CHECKS_SHEET_NAME);
             if (sheet == null) {
-                throw new IllegalStateException("Sheet not found in Zenith report: " + CHECKS_SHEET_NAME);
+                log.info("Zenith report does not contain checks sheet. Treating report as empty. file={}, sheet={}",
+                        reportFile.toAbsolutePath(),
+                        CHECKS_SHEET_NAME);
+
+                return new ZenithReportAnalysis(reportFile, List.of());
             }
 
             Map<String, Integer> columns = readHeader(sheet.getRow(0));
