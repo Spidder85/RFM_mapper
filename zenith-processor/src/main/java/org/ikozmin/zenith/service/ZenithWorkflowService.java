@@ -131,6 +131,12 @@ public final class ZenithWorkflowService {
         );
 
         try {
+            log.info("Starting the import of the registry list into Zenith. eventId={}, catalog={}, fileFormat={}, listCategory={}, file={}",
+                    event.eventId(),
+                    event.catalog(),
+                    importFormat.fileFormat(),
+                    importFormat.listCategory() == null ? "<not required>" : importFormat.listCategory(),
+                    event.registryFile());
             apiClient.importPersonList(
                     event.registryFile(),
                     importFormat.fileFormat(),

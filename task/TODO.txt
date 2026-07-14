@@ -8,76 +8,17 @@
 [?] продумать возможность обработки ошибочных events/failed
     Статус: технически есть обработка failed/retry для файловых событий, но полный сценарий Zenith еще не проверен.
 
-[?] events нужно чистить по сроку/объему, иначе они будут копиться.
-    Статус: для events/registry-updated есть EventRetentionService.
-    Осталось: отдельно проверить/добавить очистку офисных очередей ZenithImportCompleted для клиентских папок.
-
-[x] log запуска Zenith ведется.
-    Статус: logback.xml в zenith-processor есть, логирование настроено.
-
-[?] модуль zenith-processor должен иметь возможность автономного запуска.
-    Статус: есть run-zenith-once.bat, run-zenith-drain.bat, run-zenith-watch.bat и режимы once/drain/watch.
-    Осталось: проверить на реальном Zenith и офисных сетевых папках.
-
-[?] архитектура работы через события и режимы Zenith.
-    Статус: режимы FULL / IMPORT_ONLY / CHECK_ONLY реализованы технически.
-    Осталось: проверить сценарии:
-      1. rfm-downloader создает RegistryUpdated;
-      2. центральный Zenith импортирует реестр;
-      3. центральный Zenith создает ZenithImportCompleted в папки офисов;
-      4. офисный Zenith запускает массовую проверку по своему событию.
-
-!!![ ] лог периодически не архивируется и после полуночи продолжает писаться в старый файл.
-    Статус: проблема периодическая.
-    Сначала проверить в планировщике запрет параллельных запусков: "Не запускать новый экземпляр".
-    Если повторится - менять схему logback на датированный активный файл.
-
 2026.07.08
 
 [x] 1. При загрузке нескольких каталогов формируется несколько писем, а нужно одно итоговое уведомление за запуск.
 
 2026.07.09
-[ ] мне кажется сейчас формирование уведомление избыточно (оно дублируется в коде для общего запуска и отдельно для зенита). Думаю часть уведомления зенитанеобходимо формировать в одном месте, например в в блоке зенита, а rfm его просто вызывает чтобы дополнить основной.
+[x] мне кажется сейчас формирование уведомление избыточно (оно дублируется в коде для общего запуска и отдельно для зенита). Думаю часть уведомления зенитанеобходимо формировать в одном месте, например в в блоке зенита, а rfm его просто вызывает чтобы дополнить основной.
 
-[] надо предусмотреть чтобы сообщения не отправлялись дважды. Например если и у rfm и у zenith в config включены Notification, то уйдут 2 письма, а не одно. Надо чтобы в модуле зенита отправлялось уведомление только если не отправляется основное (если оба включены тоотправляется только основное, зенит выключается, если одно из включено, то срабатывает то которое включено). Как вариант основной должен насильно выключать для Zenith или для Zenith просто игнорироватья если основной включен
+[x] надо предусмотреть чтобы сообщения не отправлялись дважды. Например если и у rfm и у zenith в config включены Notification, то уйдут 2 письма, а не одно. Надо чтобы в модуле зенита отправлялось уведомление только если не отправляется основное (если оба включены тоотправляется только основное, зенит выключается, если одно из включено, то срабатывает то которое включено). Как вариант основной должен насильно выключать для Zenith или для Zenith просто игнорироватья если основной включен
 
-[] лог работы зенита не архивируется. он просто дописал дату к имени файла "zenith-processor.2026-07-07.0.log" и начал новый файл "zenith-processor.log"
+[x] лог работы зенита не архивируется. он просто дописал дату к имени файла "zenith-processor.2026-07-07.0.log" и начал новый файл "zenith-processor.log"
 
-2026.07.10
-[] если при обработки зенит вернул ошибку, то программа воспринемает это как ошибку программы, хотя это ошибка сервера зенит, а не программы и по идее должен продолжать работу. Например log такой ошибки:
-    2026-07-10 10:35:57 ERROR org.ikozmin.zenith.ZenithProcessorMain - Zenith processor failed: Failed to prepare person list import request. file=\\t-cent\Zen-co\terrlist\test\терр_экстр\260707\07.07.2026-v 2.2.xml
-    java.lang.IllegalStateException: Failed to prepare person list import request. file=\\t-cent\Zen-co\terrlist\test\терр_экстр\260707\07.07.2026-v 2.2.xml
-        at org.ikozmin.zenith.client.ZenithApiClient.importPersonList(ZenithApiClient.java:54)
-        at org.ikozmin.zenith.service.ZenithWorkflowService.importPersonListIfEnabled(ZenithWorkflowService.java:109)
-        at org.ikozmin.zenith.service.ZenithWorkflowService.processFull(ZenithWorkflowService.java:41)
-        at org.ikozmin.zenith.ZenithProcessorMain.processRegistryUpdatedEvent(ZenithProcessorMain.java:165)
-        at org.ikozmin.zenith.ZenithProcessorMain.processOnce(ZenithProcessorMain.java:128)
-        at org.ikozmin.zenith.ZenithProcessorMain.processDrain(ZenithProcessorMain.java:107)
-        at org.ikozmin.zenith.ZenithProcessorMain.call(ZenithProcessorMain.java:74)
-        at org.ikozmin.zenith.ZenithProcessorMain.call(ZenithProcessorMain.java:25)
-        at picocli.CommandLine.executeUserObject(CommandLine.java:2045)
-        at picocli.CommandLine.access$1500(CommandLine.java:148)
-        at picocli.CommandLine$RunLast.executeUserObjectOfLastSubcommandWithSameParent(CommandLine.java:2465)
-        at picocli.CommandLine$RunLast.handle(CommandLine.java:2457)
-        at picocli.CommandLine$RunLast.handle(CommandLine.java:2419)
-        at picocli.CommandLine$AbstractParseResultHandler.execute(CommandLine.java:2277)
-        at picocli.CommandLine$RunLast.execute(CommandLine.java:2421)
-        at picocli.CommandLine.execute(CommandLine.java:2174)
-        at org.ikozmin.zenith.ZenithProcessorMain.main(ZenithProcessorMain.java:58)
-    Caused by: java.lang.IllegalStateException: Zenith API call failed: import person list
-        at org.ikozmin.zenith.client.ZenithApiClient.sendNoBody(ZenithApiClient.java:173)
-        at org.ikozmin.zenith.client.ZenithApiClient.importPersonList(ZenithApiClient.java:52)
-        ... 16 common frames omitted
-    Caused by: java.lang.IllegalStateException: Zenith API error. operation=import person list, status=400, body=Ошибка при разборе списка.
-    Описание: CParserSAX() ошибка CHE
-    Уже загружен список за дату 09.07.2026, загружаемый вами список от 07.07.2026 неактуален
-    Операция: raw_endElement
-    Узел: ДатаПеречня
-    Данные: text=2026-07-07
-    Шаг: 3
-        at org.ikozmin.zenith.client.ZenithApiClient.validate(ZenithApiClient.java:182)
-        at org.ikozmin.zenith.client.ZenithApiClient.sendNoBody(ZenithApiClient.java:171)
-        ... 17 common frames omitted
 
-[] возможно ли в лог не выаодить имя метода который осществлял логирование? только вжность и сам текст?
-[] у нас evens бекапятся или копятся? должны бекапиться
+2026.07.13
+[] уведомление от зенит в режиме check_only (когда зенит запускается сам) отправляются от каждого перечня по отдельности, а должны суммартно как и при основном (когда зенит запускается от rfm_downloader)
