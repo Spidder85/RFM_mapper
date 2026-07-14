@@ -1,121 +1,134 @@
-# Актуальная инструкция по незавершенным доработкам
+# Доработка от 2026-07-14: единое уведомление автономного Zenith
 
-Дата сверки: 2026-07-13.
+## Что уже реализовано
 
-Документ содержит только пункты, которые еще требуют изменения или проверки. Уже реализованные части из старого документа удалены, чтобы не предлагать выполнить их повторно.
+1. RFM формирует одно общее уведомление для нескольких обновленных реестров.
+2. При запуске Zenith из RFM отдельное уведомление Zenith подавляется параметром `--suppress-notification`.
+3. Для RFM и Zenith используется общий построитель текстового блока `ZenithNotificationTextBuilder`.
+4. Пустой XLSX-отчет без листа `Таблица_Проверок` не считается ошибкой.
+5. Ошибка одного события не останавливает `--drain`; событие переносится в `failed`.
+6. Завершенные events очищаются через 30 дней.
+7. Старые TODO от 13.07, помеченные `[x]`, повторно реализовывать не нужно.
 
-## Что уже реализовано и не нужно переделывать
+## Проблема
 
-1. `zenith-processor --drain` продолжает работу после ошибки одного события: проблемное событие переносится в `failed`, следующие остаются доступными для обработки.
-2. Ответ Zenith о том, что импортируемый список старее уже загруженного, распознается как штатно пропущенное событие (`skipped`).
-3. Отсутствие листа `Таблица_Проверок` в XLSX означает пустой результат, а не ошибку.
-4. Полный workflow публикует `ZenithImportCompleted` для офисных очередей после успешного импорта.
-5. Завершенные events (`processed`, `failed`, `results`) удаляются через 30 дней. Каталоги `new` и `processing` намеренно не очищаются автоматически.
-6. Текст результатов Zenith уже вынесен в общий `common`-класс `ZenithNotificationTextBuilder` и используется как отдельным Zenith-уведомлением, так и в общем уведомлении RFM.
-7. Во все production-классы добавлены краткие Javadoc-комментарии; в точках входа и бизнес-сервисах прокомментированы ключевые методы.
+При автономном запуске:
 
-## 1. Зафиксировать правило единственного уведомления
-
-### Текущее поведение
-
-Дублирование уже предотвращается кодом `rfm-downloader`:
-
-```text
-RFM Notifications.Enabled = true
-и
-ZenithTrigger.SuppressNotificationWhenRfmNotificationEnabled = true
+```bat
+run-zenith-drain.bat --mode CHECK_ONLY
 ```
 
-Тогда RFM запускает Zenith с параметром `--suppress-notification`, Zenith сохраняет summary, а итоговое письмо или Telegram-сообщение отправляет только RFM.
+`ZenithProcessorMain` получает событие, сразу вызывает `sendNotificationIfNeeded(...)`, затем берет следующее. Поэтому для трех реестров уходят три письма/сообщения.
 
-Если RFM-уведомления выключены, автономный Zenith может отправить собственное уведомление по своей конфигурации.
-
-### Что изменить
-
-Файл:
+Нужный результат:
 
 ```text
-rfm-downloader/config/config.template.json
+CHECK_ONLY + --drain
+  событие te21 ┐
+  событие un   ├─> одно итоговое уведомление после разбора очереди
+  событие mvk  ┘
 ```
 
-В существующий объект `ZenithTrigger` добавить явную настройку. Весь объект после изменения должен выглядеть так:
+`--once` продолжает отправлять одно уведомление по одному событию. `--watch` обрабатывает события по мере появления, поэтому отправляет одно уведомление за одну итерацию; это корректно для постоянно работающего процесса.
 
-```json
-"ZenithTrigger": {
-  "Enabled": true,
-  "Command": "run-zenith-drain.bat --mode FULL",
-  "WorkingDirectory": ".",
-  "TimeoutSeconds": 1800,
-  "SuppressNotificationWhenRfmNotificationEnabled": true
+## 1. Добавить элемент пакетного уведомления
+
+Создать файл:
+
+```text
+common/src/main/java/org/ikozmin/common/notification/ZenithNotificationItem.java
+```
+
+Код файла полностью:
+
+```java
+package org.ikozmin.common.notification;
+
+import org.ikozmin.common.event.ZenithProcessingSummary;
+
+/**
+ * Результат обработки одного перечня в составе итогового уведомления Zenith.
+ */
+public record ZenithNotificationItem(
+        String catalog,
+        ZenithProcessingSummary summary
+) {
 }
 ```
 
-Зачем: значение и без того по умолчанию равно `true`, но явная настройка делает правило понятным сотруднику, который будет сопровождать конфиг.
+Зачем: класс отделяет накопление результатов запуска от их доставки. `ZenithProcessorMain` больше не должен отправлять сообщение посреди разбора очереди.
 
-Рабочий `config.json` менять аналогично только при необходимости явного документирования. Логику Java менять не нужно.
-
-## 2. Исправить формат и ротацию лога Zenith
-
-Сейчас `zenith-processor` пишет ротационные файлы с расширением `.log` и выводит имя класса logger. Требование TODO: архивировать старые логи и оставлять только важность с текстом.
+## 2. Обновить ZenithNotificationTextBuilder
 
 Файл:
 
 ```text
-zenith-processor/src/main/resources/logback.xml
+common/src/main/java/org/ikozmin/common/notification/ZenithNotificationTextBuilder.java
 ```
 
-Заменить файл полностью:
+Добавить импорт:
 
-```xml
-<?xml version="1.0" encoding="UTF-8" ?>
-<configuration>
-    <property name="LOG_DIR" value="logs"/>
-    <property name="LOG_FILE" value="${LOG_DIR}/zenith-processor.log"/>
-
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <charset>UTF-8</charset>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_FILE}</file>
-
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/zenith-processor.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-            <maxFileSize>10MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>300MB</totalSizeCap>
-        </rollingPolicy>
-
-        <encoder>
-            <charset>UTF-8</charset>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <logger name="org.ikozmin.zenith" level="INFO"/>
-
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-    </root>
-</configuration>
+```java
+import java.util.List;
 ```
 
-Результат:
+Заменить существующий метод `buildStandalone(String catalog, ZenithProcessingSummary summary)` полностью:
 
-```text
-logs/zenith-processor.log
-logs/zenith-processor.2026-07-13.0.log.gz
+```java
+/**
+ * Собирает отдельное уведомление для одного результата автономного запуска Zenith.
+ */
+public NotificationMessage buildStandalone(String catalog, ZenithProcessingSummary summary) {
+    return buildStandalone(List.of(new ZenithNotificationItem(catalog, summary)));
+}
 ```
 
-После ротации старый файл будет сжат, активный всегда остается `zenith-processor.log`. Имя Java-класса в строку лога не выводится.
+После него добавить новый метод полностью:
 
-## 3. Дополнить итог drain информацией о failed-событиях
+```java
+/**
+ * Собирает одно итоговое уведомление по всем перечням, обработанным в запуске Zenith.
+ */
+public NotificationMessage buildStandalone(List<ZenithNotificationItem> items) {
+    if (items == null || items.isEmpty()) {
+        throw new IllegalArgumentException("Zenith notification items are empty");
+    }
 
-Код уже не прерывает очередь при ошибке одного события, но в завершающем сообщении не показывает число ошибок.
+    String lineSeparator = System.lineSeparator();
+    String subject = items.size() == 1
+            ? "Результат проверки Zenith: " + displayCatalogName(items.getFirst().catalog())
+            : "Результаты проверки Zenith: " + items.size() + " перечня(ей)";
+
+    StringBuilder body = new StringBuilder();
+    body.append("Здравствуйте.").append(lineSeparator);
+    body.append(lineSeparator);
+    body.append("Завершена проверка в Zenith.").append(lineSeparator);
+    body.append("Обработано перечней: ").append(items.size()).append(lineSeparator);
+    body.append(lineSeparator);
+
+    for (int index = 0; index < items.size(); index++) {
+        ZenithNotificationItem item = items.get(index);
+
+        body.append(index + 1)
+                .append(". Перечень: ")
+                .append(displayCatalogName(item.catalog()))
+                .append(lineSeparator);
+
+        appendReportFile(body, item.summary(), lineSeparator);
+        appendResultBlock(body, "    ", item.summary());
+        body.append(lineSeparator);
+    }
+
+    body.append("Это автоматическое уведомление. Не надо на него отвечать.")
+            .append(lineSeparator);
+
+    return new NotificationMessage(subject, body.toString());
+}
+```
+
+Остальные методы класса не менять.
+
+## 3. Накопить результаты в ZenithProcessorMain
 
 Файл:
 
@@ -123,108 +136,260 @@ logs/zenith-processor.2026-07-13.0.log.gz
 zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java
 ```
 
-Найти метод:
+### 3.1. Импорты
+
+Добавить импорты:
 
 ```java
-private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
+import org.ikozmin.common.notification.ZenithNotificationItem;
+
+import java.util.ArrayList;
+import java.util.List;
 ```
 
-Заменить метод полностью:
+### 3.2. Заменить processDrain полностью
 
 ```java
+/**
+ * Обрабатывает всю доступную очередь и отправляет одно уведомление по ее итогам.
+ */
 private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
     int processed = 0;
     int failed = 0;
+    List<ZenithNotificationItem> notificationItems = new ArrayList<>();
 
-    while (true) {
-        int exitCode = processOnce(config, workflowMode, false);
+    try {
+        while (true) {
+            int exitCode = processOnce(config, workflowMode, false, notificationItems);
 
-        if (exitCode == EXIT_NO_EVENTS) {
-            log.info("Zenith drain completed. processedEvents={}, failedEvents={}", processed, failed);
-            return EXIT_OK;
+            if (exitCode == EXIT_NO_EVENTS) {
+                log.info("Zenith drain completed. processedEvents={}, failedEvents={}", processed, failed);
+                return EXIT_OK;
+            }
+
+            if (exitCode == EXIT_EVENT_FAILED) {
+                failed++;
+                continue;
+            }
+
+            if (exitCode != EXIT_OK) {
+                return exitCode;
+            }
+
+            processed++;
         }
-
-        if (exitCode == EXIT_EVENT_FAILED) {
-            failed++;
-            continue;
-        }
-
-        if (exitCode != EXIT_OK) {
-            return exitCode;
-        }
-
-        processed++;
+    } finally {
+        sendNotificationIfNeeded(config, notificationItems);
     }
 }
 ```
 
-Зачем: по одной итоговой строке журнала сразу видно, была ли очередь обработана полностью без ошибок. Код завершения `drain` остается `0`: это корректно, потому что очередь разобрана, а ошибочные события уже лежат в `failed`.
-
-## 4. Проверить сохранение XLSX-отчета, не меняя код без подтвержденной ошибки
-
-Код `ZenithReportService` уже делает необходимое:
+### 3.3. Заменить processOnce с двумя аргументами полностью
 
 ```java
-Path outputDir = resolveAppPath(config.getOutputDirectory());
-Files.createDirectories(outputDir);
-Path targetFile = outputDir.resolve(fileName);
-apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
-```
-
-Поэтому сначала проверить фактическую конфигурацию и журнал, а не менять реализацию.
-
-Для рабочего `zenith-config.json` у нужного каталога должен быть заполнен блок, например:
-
-```json
-"te21": {
-  "Enabled": true,
-  "OutDocType": 10217,
-  "Filter": true,
-  "FilterTemplatePath": "config/zenith/podft-report-filter-te21.xml",
-  "OutputDirectory": "downloads/zenith-reports/te21",
-  "FileNamePrefix": "T38_terr"
+/**
+ * Обрабатывает одно событие и отправляет уведомление только по результату этой итерации.
+ */
+private Integer processOnce(ZenithConfig config, ZenithWorkflowMode workflowMode) {
+    List<ZenithNotificationItem> notificationItems = new ArrayList<>();
+    int exitCode = processOnce(config, workflowMode, requireEvent, notificationItems);
+    sendNotificationIfNeeded(config, notificationItems);
+    return exitCode;
 }
 ```
 
-Относительный `OutputDirectory` разрешается от `app.home`, который задают bat-скрипты. После запуска искать отчет нужно в:
+### 3.4. Заменить перегруженный processOnce полностью
 
-```text
-<папка zenith-processor>/downloads/zenith-reports/te21
+```java
+/**
+ * Маршрутизирует одну итерацию в нужную очередь и передает накопитель результатов.
+ */
+private Integer processOnce(
+        ZenithConfig config,
+        ZenithWorkflowMode workflowMode,
+        boolean requireEventForIteration,
+        List<ZenithNotificationItem> notificationItems
+) {
+    return switch (workflowMode) {
+        case FULL -> processRegistryUpdatedEvent(
+                config,
+                ZenithWorkflowMode.FULL,
+                requireEventForIteration,
+                notificationItems
+        );
+        case IMPORT_ONLY -> processRegistryUpdatedEvent(
+                config,
+                ZenithWorkflowMode.IMPORT_ONLY,
+                requireEventForIteration,
+                notificationItems
+        );
+        case CHECK_ONLY -> processImportCompletedEvent(
+                config,
+                requireEventForIteration,
+                notificationItems
+        );
+    };
+}
 ```
 
-Если каталога нет, в логе должна быть строка `Creating Zenith report` или ошибка до нее. Если строка есть, но файла нет, приложить фрагмент лога от `Creating Zenith report` до `Zenith report downloaded`.
+### 3.5. Изменить сигнатуру processRegistryUpdatedEvent
 
-## 5. Важная проверка шаблона BaseUrl
+Найти сигнатуру:
 
-`ZenithApiClient` самостоятельно добавляет путь `/zenith-object/api/...`. Поэтому значение `Zenith.BaseUrl` не должно уже содержать `/zenith-object`.
-
-Файл:
-
-```text
-zenith-processor/config/zenith-config.template.json
+```java
+private Integer processRegistryUpdatedEvent(
+        ZenithConfig config,
+        ZenithWorkflowMode workflowMode,
+        boolean requireEventForIteration
+) {
 ```
 
-Заменить:
+Заменить только сигнатуру на:
 
-```json
-"BaseUrl": "https://zenith-server/zenith-object"
+```java
+private Integer processRegistryUpdatedEvent(
+        ZenithConfig config,
+        ZenithWorkflowMode workflowMode,
+        boolean requireEventForIteration,
+        List<ZenithNotificationItem> notificationItems
+) {
+```
+
+В `try` этого метода заменить блок:
+
+```java
+if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+    sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
+}
 ```
 
 на:
 
-```json
-"BaseUrl": "https://zenith-server"
+```java
+if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+    notificationItems.add(new ZenithNotificationItem(
+            claimedEvent.get().event().catalog(),
+            summary
+    ));
+}
 ```
 
-И аналогично проверить рабочий `zenith-config.json`.
+В `catch` заменить строку:
 
-Иначе итоговый URL станет ошибочным:
-
-```text
-https://zenith-server/zenith-object/zenith-object/api/...
+```java
+saveFailureSummary(config, claimedEvent.get().event().eventId(), e);
 ```
 
-## 6. Проверка после изменений
+на полный блок:
+
+```java
+ZenithProcessingSummary failureSummary = ZenithProcessingSummary.failed(
+        claimedEvent.get().event().eventId(),
+        "Ошибка обработки события Zenith: " + e.getMessage()
+);
+saveSummary(config, failureSummary);
+
+if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+    notificationItems.add(new ZenithNotificationItem(
+            claimedEvent.get().event().catalog(),
+            failureSummary
+    ));
+}
+```
+
+### 3.6. Изменить сигнатуру processImportCompletedEvent
+
+Найти:
+
+```java
+private Integer processImportCompletedEvent(ZenithConfig config, boolean requireEventForIteration) {
+```
+
+Заменить на:
+
+```java
+private Integer processImportCompletedEvent(
+        ZenithConfig config,
+        boolean requireEventForIteration,
+        List<ZenithNotificationItem> notificationItems
+) {
+```
+
+В `try` заменить:
+
+```java
+sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
+```
+
+на:
+
+```java
+notificationItems.add(new ZenithNotificationItem(
+        claimedEvent.get().event().catalog(),
+        summary
+));
+```
+
+В `catch` заменить:
+
+```java
+saveFailureSummary(config, claimedEvent.get().event().sourceEventId(), e);
+```
+
+на:
+
+```java
+ZenithProcessingSummary failureSummary = ZenithProcessingSummary.failed(
+        claimedEvent.get().event().sourceEventId(),
+        "Ошибка обработки события Zenith: " + e.getMessage()
+);
+saveSummary(config, failureSummary);
+notificationItems.add(new ZenithNotificationItem(
+        claimedEvent.get().event().catalog(),
+        failureSummary
+));
+```
+
+### 3.7. Заменить sendNotificationIfNeeded полностью
+
+```java
+/**
+ * Отправляет одно уведомление по накопленным результатам запуска, если доставка не подавлена.
+ */
+private void sendNotificationIfNeeded(
+        ZenithConfig config,
+        List<ZenithNotificationItem> notificationItems
+) {
+    if (notificationItems == null || notificationItems.isEmpty()) {
+        return;
+    }
+
+    if (suppressNotification) {
+        log.info("Zenith notification is suppressed by command line option");
+        return;
+    }
+
+    NotificationDispatcher dispatcher = new NotificationDispatcher(config.getNotifications());
+
+    if (!dispatcher.isEnabled()) {
+        return;
+    }
+
+    NotificationMessage message = new ZenithNotificationTextBuilder()
+            .buildStandalone(notificationItems);
+    dispatcher.send(message);
+}
+```
+
+Метод `saveFailureSummary(...)` после этой доработки больше не используется. Удалить его целиком, чтобы не оставлять дублирующую логику создания failure summary.
+
+## 4. Комментарии в коде
+
+Классные комментарии добавлены во все production-файлы. Дополнительно нужно документировать каждый нетривиальный метод: файловые операции, HTTP, очереди, бизнес-правила, формирование уведомлений, обработку ошибок и преобразование путей.
+
+Не документируются отдельными Javadoc тривиальные DTO-getter-ы (`getUserName()`, `getPort()`) и record-accessor-ы: их имена и типы исчерпывающе описывают действие. Комментарий вида «возвращает имя пользователя» не добавляет знания и ухудшает код.
+
+## 5. Проверка
 
 Из корня Maven-проекта:
 
@@ -232,12 +397,20 @@ https://zenith-server/zenith-object/zenith-object/api/...
 mvn clean package
 ```
 
-Проверить:
+Положить в `Events.CheckDirectory/new` минимум три корректных события для `te21`, `un`, `mvk` и выполнить:
 
-1. Запуск `run-zenith-drain.bat --mode FULL` обрабатывает все события из `new`.
-2. Ошибочное событие оказывается в `failed`, а следующие обрабатываются.
-3. В конце есть строка `Zenith drain completed. processedEvents=..., failedEvents=...`.
-4. При запуске из RFM включены оба блока `Notifications`, но приходит только одно итоговое уведомление от RFM.
-5. При автономном запуске Zenith и выключенных уведомлениях RFM приходит только уведомление Zenith.
-6. После следующей даты старый лог имеет имя `zenith-processor.YYYY-MM-DD.N.log.gz`.
-7. Отчет находится в каталоге из `Reports.<catalog>.OutputDirectory`.
+```bat
+run-zenith-drain.bat --mode CHECK_ONLY
+```
+
+Ожидаемый результат:
+
+```text
+все три события -> processed
+создано три XLSX-отчета или три корректных пустых summary
+отправлено одно email/Telegram-уведомление
+в уведомлении есть три пронумерованных блока перечней
+в логе: Zenith drain completed. processedEvents=3, failedEvents=0
+```
+
+Затем положить одно некорректное событие между двумя корректными. Ожидаемо: одно попадет в `failed`, корректные будут обработаны, а единое уведомление будет содержать как успешные результаты, так и блок с причиной ошибки.

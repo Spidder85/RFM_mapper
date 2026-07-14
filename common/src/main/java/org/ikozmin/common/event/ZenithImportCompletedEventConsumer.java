@@ -18,6 +18,7 @@ public final class ZenithImportCompletedEventConsumer {
     private final Path processedDir;
     private final Path failedDir;
 
+    /** Инициализирует пути состояний офисной очереди относительно ее корня. */
     public ZenithImportCompletedEventConsumer(Path rootDir) {
         this.newDir = rootDir.resolve("new");
         this.processingDir = rootDir.resolve("processing");
@@ -75,6 +76,7 @@ public final class ZenithImportCompletedEventConsumer {
         move(claimedEvent.file(), failedDir.resolve(claimedEvent.file().getFileName()));
     }
 
+    /** Перемещает событие между состояниями офисной файловой очереди. */
     private void move(Path source, Path target) {
         try {
             Files.createDirectories(target.getParent());
@@ -84,6 +86,7 @@ public final class ZenithImportCompletedEventConsumer {
         }
     }
 
+    /** Захваченное офисное событие и его файл в processing. */
     public record ClaimedEvent(ZenithImportCompletedEvent event, Path file) {
     }
 }

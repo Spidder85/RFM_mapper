@@ -169,6 +169,7 @@ public final class RegistryUpdateService {
         }
     }
 
+    /** Формирует безопасное имя папки даты из метаданных реестра. */
     private String resolveDateFolder(CatalogInfo catalogInfo) {
         String date = catalogInfo.effectiveDate();
 
@@ -227,6 +228,7 @@ public final class RegistryUpdateService {
         }
     }
 
+    /** Ограничивает распаковку ZIP текущим каталогом и исключает Zip Slip. */
     private Path resolveSafeZipTarget(Path parentDir, String entryName) {
         String safeName = entryName.replace('\\', '/');
 
@@ -247,6 +249,7 @@ public final class RegistryUpdateService {
         return target;
     }
 
+    /** Создает воспроизводимое имя выгруженного файла из типа, даты и версии реестра. */
     private String buildFileName(CatalogType catalogType, CatalogInfo catalogInfo) {
         String date = catalogInfo.effectiveDate();
 
@@ -267,6 +270,7 @@ public final class RegistryUpdateService {
             + catalogType.getExtension();
     }
 
+    /** Возвращает размер файла, не превращая диагностическую ошибку в сбой выгрузки. */
     private long safeFileSize(Path file) {
         if (file == null || !Files.exists(file)) {
             return 0L;

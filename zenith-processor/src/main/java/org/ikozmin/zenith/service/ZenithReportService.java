@@ -26,12 +26,14 @@ public final class ZenithReportService {
     private final ZenithApiClient apiClient;
     private final ZenithConfig.Report config;
 
+    /** Создает сервис выгрузки с API-клиентом и настройками конкретного типа отчета. */
     public ZenithReportService(ZenithApiClient apiClient, ZenithConfig.Report config) {
         this.apiClient = apiClient;
         this.config = config;
         this.stateStore = new ZenithStateStore(STATE_FILE);
     }
 
+    /** Создает отчет за период с последней успешной проверки и сохраняет его на диск. */
     public ZenithReportResult createAndDownloadReport(String eventId, String catalog, String idXml) {
         try {
             LocalDate endDate = LocalDate.now();
@@ -101,6 +103,7 @@ public final class ZenithReportService {
         }
     }
 
+    /** Загружает XML-фильтр отчета из каталога приложения. */
     private String loadFilterXml() throws Exception {
         Path filterPath = resolveAppPath(config.getFilterTemplatePath());
 
@@ -114,6 +117,7 @@ public final class ZenithReportService {
         return Files.readString(filterPath);
     }
 
+    /** Преобразует относительный путь конфигурации в путь относительно app.home. */
     private Path resolveAppPath(String value) {
         Path path = Path.of(value);
 

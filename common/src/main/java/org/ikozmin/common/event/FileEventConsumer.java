@@ -18,6 +18,7 @@ public final class FileEventConsumer {
     private final Path processedDir;
     private final Path failedDir;
 
+    /** Инициализирует пути состояний очереди относительно ее корневого каталога. */
     public FileEventConsumer(Path rootDir) {
         this.newDir = rootDir.resolve("new");
         this.processingDir = rootDir.resolve("processing");
@@ -75,6 +76,7 @@ public final class FileEventConsumer {
         move(claimedEvent.file(), failedDir.resolve(claimedEvent.file().getFileName()));
     }
 
+    /** Перемещает файл события в следующее состояние очереди. */
     private void move(Path source, Path target) {
         try {
             Files.createDirectories(target.getParent());
@@ -84,6 +86,7 @@ public final class FileEventConsumer {
         }
     }
 
+    /** Захваченное событие и его файл в каталоге processing. */
     public record ClaimedEvent(RegistryUpdatedEvent event, Path file) {
     }
 

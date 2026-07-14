@@ -41,6 +41,7 @@ public final class ZenithNotificationTextBuilder {
         appendResultBlock(body, indent + indent, summary);
     }
 
+    /** Добавляет в текст понятный результат: ошибку, пустой отчет либо найденных лиц. */
     private void appendResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
         String lineSeparator = System.lineSeparator();
 
@@ -129,12 +130,14 @@ public final class ZenithNotificationTextBuilder {
                 .append(lineSeparator);
     }
 
+    /** Добавляет путь к XLSX-отчету, когда Zenith его сформировал. */
     private void appendReportFile(StringBuilder body, ZenithProcessingSummary summary, String lineSeparator) {
         if (summary != null && summary.reportFile() != null) {
             body.append("Отчет: ").append(normalize(summary.reportFile())).append(lineSeparator);
         }
     }
 
+    /** Преобразует внутренний код каталога в название для сотрудника. */
     private String displayCatalogName(String catalog) {
         if (catalog == null) {
             return "Неизвестный перечень";
@@ -149,10 +152,12 @@ public final class ZenithNotificationTextBuilder {
         };
     }
 
+    /** Подставляет дефис вместо отсутствующего значения в пользовательском тексте. */
     private String value(String value) {
         return value == null || value.isBlank() ? "-" : value;
     }
 
+    /** Нормализует разделители пути для читаемого текста уведомления. */
     private String normalize(Path path) {
         return path.toString().replace('\\', '/');
     }

@@ -148,6 +148,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         return processOnce(config, workflowMode, requireEvent);
     }
 
+    /** Маршрутизирует одну итерацию в очередь, соответствующую выбранному режиму workflow. */
     private Integer processOnce(ZenithConfig config, ZenithWorkflowMode workflowMode, boolean requireEventForIteration) {
         return switch (workflowMode) {
             case FULL -> processRegistryUpdatedEvent(config, ZenithWorkflowMode.FULL, requireEventForIteration);
@@ -248,6 +249,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
     }
 
+    /** Возвращает единый код отсутствия события и при необходимости сообщает о нарушении require-event. */
     private int noEvent(boolean requireEventForIteration) {
         if (requireEventForIteration) {
             log.error("No events found, but event is required");
@@ -270,6 +272,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         log.info("Zenith summary saved: {}", summaryFile.toAbsolutePath());
     }
 
+    /** Сохраняет summary ошибки, не позволяя вторичной ошибке записи скрыть исходную проблему. */
     private void saveFailureSummary(ZenithConfig config, String eventId, Exception e) {
         try {
             ZenithProcessingSummary summary = ZenithProcessingSummary.failed(
@@ -285,6 +288,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
     }
 
+    /** Выбирает режим из CLI, а при его отсутствии - из конфигурации. */
     private ZenithWorkflowMode resolveMode(ZenithConfig config) {
         if (mode != null && !mode.isBlank()) {
             return ZenithWorkflowMode.from(mode);
