@@ -4,6 +4,7 @@ import org.ikozmin.rfm.model.CatalogType;
 
 import java.nio.file.Path;
 
+/** Итог проверки одного реестра: наличие обновления, файлы и версия. */
 public record UpdateResult(
         boolean downloaded,
         CatalogType catalogType,

@@ -3,6 +3,7 @@ package org.ikozmin.rfm.service;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 
+/** Выбирает идентификатор запроса скачивания из метаданных конкретного типа реестра. */
 public final class DownloadRequestIdResolver {
     public String resolve(CatalogType catalogType, CatalogInfo catalogInfo) {
         return switch (catalogType) {

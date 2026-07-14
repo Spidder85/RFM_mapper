@@ -3,6 +3,7 @@ package org.ikozmin.rfm.client;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.Contour;
 
+/** Формирует URL методов API для выбранного контура Росфинмониторинга. */
 public final class RfmEndpoints {
     private static final String BASE_URL = "https://portal.fedsfm.ru:8081/Services/fedsfm-service";
     //private static final String BASE_URL = "https://portal.fedsfm.ru/Services/fedsfm-service";

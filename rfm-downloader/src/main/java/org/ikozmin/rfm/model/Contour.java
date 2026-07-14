@@ -2,6 +2,7 @@ package org.ikozmin.rfm.model;
 
 import java.util.Locale;
 
+/** Доступные контуры API: тестовый и продуктивный. */
 public enum Contour {
     PROD,
     TEST;

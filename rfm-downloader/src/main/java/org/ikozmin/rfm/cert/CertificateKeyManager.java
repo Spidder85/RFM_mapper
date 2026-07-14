@@ -7,6 +7,7 @@ import java.security.Principal;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
+/** Ограничивает TLS-аутентификацию одним выбранным клиентским сертификатом. */
 public final class CertificateKeyManager extends X509ExtendedKeyManager {
     private final X509ExtendedKeyManager delegate;
     private final String alias;

@@ -5,6 +5,7 @@ import org.ikozmin.common.json.JsonMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/** Загружает, нормализует и проверяет конфигурацию zenith-processor. */
 public final class ZenithConfigLoader {
     public ZenithConfig load(Path path) {
         try {

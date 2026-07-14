@@ -2,8 +2,14 @@ package org.ikozmin.rfm.config;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.ikozmin.common.notification.NotificationsConfig;
+
+
+import java.util.List;
+import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Корневая модель пользовательского конфигурационного файла rfm-downloader. */
 public final class AppConfig {
     @JsonProperty("Credentials")
     private Credentials credentials;
@@ -17,6 +23,9 @@ public final class AppConfig {
     @JsonProperty("DefaultCatalog")
     private String defaultCatalog;
 
+    @JsonProperty("Catalogs")
+    private List<String> catalogs;
+
     @JsonProperty("UseTestContour")
     private boolean useTestContour;
 
@@ -24,7 +33,7 @@ public final class AppConfig {
     private NotificationsConfig notifications;
 
     @JsonProperty("OutputDirectory")
-    private String outputDirectory;
+    private OutputConfig output;
 
     @JsonProperty("Retention")
     private RetentionConfig retention;
@@ -51,6 +60,10 @@ public final class AppConfig {
         return defaultCatalog;
     }
 
+    public List<String> getCatalogs() {
+        return catalogs == null ? List.of() : catalogs;
+    }
+
     public boolean isUseTestContour() {
         return useTestContour;
     }
@@ -59,8 +72,8 @@ public final class AppConfig {
         return notifications;
     }
 
-    public String getOutputDirectory() {
-        return outputDirectory;
+    public OutputConfig getOutputDirectory() {
+        return output;
     }
 
     public RetentionConfig getRetention() {
@@ -73,6 +86,23 @@ public final class AppConfig {
 
     public ZenithTriggerConfig getZenithTrigger() {
         return zenithTrigger;
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static final class OutputConfig {
+        @JsonProperty("Path")
+        private String path;
+
+        @JsonProperty("Catalogs")
+        private Map<String, String> catalogs;
+
+        public String getPath() {
+            return path;
+        }
+
+        public Map<String, String> getCatalogs() {
+            return catalogs;
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

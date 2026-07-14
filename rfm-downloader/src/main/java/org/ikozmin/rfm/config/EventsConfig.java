@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Настройки файловой очереди событий об обновленных реестрах. */
 public final class EventsConfig {
     @JsonProperty("Directory")
     private String directory;

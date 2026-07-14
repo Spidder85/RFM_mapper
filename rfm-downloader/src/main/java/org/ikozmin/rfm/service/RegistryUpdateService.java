@@ -1,7 +1,7 @@
 package org.ikozmin.rfm.service;
 
 import org.ikozmin.rfm.client.RfmClient;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.ikozmin.rfm.model.CatalogInfo;
 import org.ikozmin.rfm.model.CatalogType;
 import org.ikozmin.rfm.model.DownloadedFile;
@@ -17,9 +17,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+/** Проверяет версию реестра, скачивает обновление и фиксирует его локальное состояние. */
 public final class RegistryUpdateService {
     private static final Logger log = LoggerFactory.getLogger(RegistryUpdateService.class);
 
@@ -29,21 +31,26 @@ public final class RegistryUpdateService {
     private final Path downloadDir;
     private final DownloadRequestIdResolver downloadRequestIdResolver;
     private final RegistryFileValidator registryFileValidator;
+    private final Map<String, String> catalogFolderMapping;
 
+    /** Создает сервис обновления с хранилищем состояния и целевыми каталогами. */
     public RegistryUpdateService(
         RfmClient apiClient,
         RegistryStateStore stateStore,
         Path workDir,
-        Path downloadDir
+        Path downloadDir,
+        Map<String, String> catalogFolderMapping
     ) {
         this.apiClient = apiClient;
         this.stateStore = stateStore;
         this.workDir = workDir;
         this.downloadDir = downloadDir;
+        this.catalogFolderMapping = catalogFolderMapping;
         this.downloadRequestIdResolver = new DownloadRequestIdResolver();
         this.registryFileValidator = new RegistryFileValidator();
     }
 
+    /** Выполняет проверку и при необходимости скачивание одного типа реестра. */
     public UpdateResult update(CatalogType catalogType) {
         log.info("Checking registry update. catalog={}", catalogType.getCode());
 
@@ -120,6 +127,7 @@ public final class RegistryUpdateService {
         );
     }
 
+    /** Скачивает файл во временное имя и атомарно публикует готовую версию. */
     private Path downloadAndMoveAtomically(
             CatalogType catalogType,
             CatalogInfo catalogInfo,
@@ -128,7 +136,12 @@ public final class RegistryUpdateService {
         try {
             Files.createDirectories(workDir);
 
-            Path dateDir = downloadDir.resolve(resolveDateFolder(catalogInfo));
+            String folderName = catalogFolderMapping.get(catalogType.getCode());
+            if (folderName == null || folderName.isBlank()) {
+                folderName = catalogType.getCode();
+            }
+            Path catalogDir = downloadDir.resolve(folderName);
+            Path dateDir = catalogDir.resolve(resolveDateFolder(catalogInfo));
             Files.createDirectories(dateDir);
 
             Path finalFile = dateDir.resolve(buildFileName(catalogType, catalogInfo));
@@ -168,6 +181,7 @@ public final class RegistryUpdateService {
         return safeDate.length() >= 8 ? safeDate.substring(2, 8) : safeDate;
     }
 
+    /** Извлекает единственный XML из ZIP и защищает от небезопасных путей архива. */
     private Path unzipSingleXmlFile(Path zipFile) {
         try {
             Path parentDir = zipFile.getParent();

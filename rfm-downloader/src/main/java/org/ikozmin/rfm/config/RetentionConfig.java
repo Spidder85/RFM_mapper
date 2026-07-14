@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Настройки хранения скачанных файлов и журнала аудита. */
 public final class RetentionConfig {
     @JsonProperty("Enabled")
     private boolean enabled;

@@ -1,0 +1,9 @@
+TODO для модуля zenith-processor
+
+2026.07.10
+[x] отсутсвие листа при проверке выгрузки - думаю не ошибка, т.к если этого листа нету (он же второй лист (всего 1 лист в workbook)) то проверка просто никого не нашла. а сейчас зенит у нас будет возвращять ошибку, хотя это не ошибка
+   Sheet sheet = workbook.getSheet(CHECKS_SHEET_NAME);
+            if (sheet == null) {
+                throw new IllegalStateException("Sheet not found in Zenith report: " + CHECKS_SHEET_NAME);
+            }
+   и опять же вышел с ошибкй, хотя у нас были еще события на обработку

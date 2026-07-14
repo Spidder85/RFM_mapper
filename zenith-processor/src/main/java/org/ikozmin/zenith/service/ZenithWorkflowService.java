@@ -1,15 +1,18 @@
 package org.ikozmin.zenith.service;
 
 import org.ikozmin.common.event.RegistryUpdatedEvent;
+import org.ikozmin.common.event.ZenithImportCompletedEvent;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
+import org.ikozmin.zenith.event.ZenithImportEventPublisher;
 import org.ikozmin.zenith.fes.FesPackage;
 import org.ikozmin.zenith.fes.FesPackageService;
 import org.ikozmin.zenith.person.FoundPersonsStore;
 import org.ikozmin.zenith.report.ZenithReportAnalysis;
 import org.ikozmin.zenith.report.ZenithReportAnalyzer;
 import org.ikozmin.zenith.report.ZenithReportPerson;
+import org.ikozmin.zenith.client.ZenithApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,57 +20,154 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Выполняет бизнес-сценарии Zenith: импорт реестра, проверку, отчет и подготовку ФЭС. */
 public final class ZenithWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(ZenithWorkflowService.class);
 
-    private static final String PERSON_LIST_FILE_FORMAT = "TerroristsXml";
-    private static final boolean PERSON_LIST_APPEND = false;
-    private static final boolean MASS_CHECK_PERIODIC = false;
-
     private final ZenithConfig config;
     private final ZenithApiClient apiClient;
+    private final ZenithImportFormatResolver importFormatResolver;
 
     public ZenithWorkflowService(ZenithConfig config) {
         this.config = config;
         this.apiClient = new ZenithApiClient(config.getZenith());
+        this.importFormatResolver = new ZenithImportFormatResolver();
     }
 
-    public ZenithProcessingSummary process(RegistryUpdatedEvent event) {
-        log.info("Processing registry update event. eventId={}, catalog={}, file={}",
+    /** Выполняет полный центральный цикл: импорт, публикацию офисных событий, проверку и отчет. */
+    public ZenithProcessingSummary processFull(RegistryUpdatedEvent event) {
+        log.info("Processing full Zenith workflow. eventId={}, catalog={}, file={}",
                 event.eventId(),
                 event.catalog(),
                 event.registryFile());
 
-        importPersonListIfEnabled(event);
-        runMassCheckIfEnabled();
+        boolean imported = importPersonListIfEnabled(event);
 
-        ZenithProcessingSummary summary = createReportIfEnabled(event);
+        if (!imported) {
+            return ZenithProcessingSummary.skipped(
+                    event.eventId(),
+                    "Реестр не импортирован в Zenith: в Zenith уже загружен более актуальный список. Каталог: "
+                            + event.catalog()
+            );
+        }
 
-        log.info("Zenith workflow completed. eventId={}", event.eventId());
+        new ZenithImportEventPublisher(config.getEvents()).publish(event);
+        runMassCheckIfEnabled(event.catalog());
+
+        ZenithProcessingSummary summary = createReportIfEnabled(
+                event.eventId(),
+                event.catalog(),
+                event.idXml()
+        );
+
+        log.info("Full Zenith workflow completed. eventId={}", event.eventId());
 
         return summary;
     }
 
-    private void importPersonListIfEnabled(RegistryUpdatedEvent event) {
+    /** Импортирует реестр и сообщает офисам, что можно запускать проверку. */
+    public ZenithProcessingSummary processImportOnly(RegistryUpdatedEvent event) {
+        log.info("Processing Zenith import only. eventId={}, catalog={}, file={}",
+                event.eventId(),
+                event.catalog(),
+                event.registryFile());
+
+        boolean imported = importPersonListIfEnabled(event);
+
+        if (!imported) {
+            return ZenithProcessingSummary.skipped(
+                    event.eventId(),
+                    "Реестр не импортирован в Zenith: в Zenith уже загружен более актуальный список. Каталог: "
+                            + event.catalog()
+            );
+        }
+
+        new ZenithImportEventPublisher(config.getEvents()).publish(event);
+
+        return new ZenithProcessingSummary(
+                event.eventId(),
+                true,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                "Реестр импортирован в Zenith. Каталог: " + event.catalog()
+        );
+    }
+
+    /** Выполняет только массовую проверку и подготовку отчета по офисному событию. */
+    public ZenithProcessingSummary processCheckOnly(ZenithImportCompletedEvent event) {
+        log.info("Processing Zenith check only. eventId={}, sourceEventId={}, catalog={}",
+                event.eventId(),
+                event.sourceEventId(),
+                event.catalog());
+
+        runMassCheckIfEnabled(event.catalog());
+
+        ZenithProcessingSummary summary = createReportIfEnabled(
+                event.sourceEventId(),
+                event.catalog(),
+                event.idXml()
+        );
+
+        log.info("Zenith check workflow completed. eventId={}", event.eventId());
+
+        return summary;
+    }
+
+    /** Импортирует файл реестра и отдельно обрабатывает штатный ответ о неактуальном списке. */
+    private boolean importPersonListIfEnabled(RegistryUpdatedEvent event) {
         ZenithConfig.Import importConfig = config.getZenith().getImportConfig();
 
         if (importConfig != null && !importConfig.isEnabled()) {
             log.info("Zenith import step is disabled");
-            return;
+            return true;
         }
 
-        apiClient.importPersonList(
-                event.registryFile(),
-                PERSON_LIST_FILE_FORMAT,
-                PERSON_LIST_APPEND
+        ZenithImportFormatResolver.ImportFormat importFormat = importFormatResolver.resolve(
+                event.catalog(),
+                importConfig
         );
 
-        log.info("Registry list imported into Zenith. eventId={}, file={}",
+        try {
+            log.info("Starting the import of the registry list into Zenith. eventId={}, catalog={}, fileFormat={}, listCategory={}, file={}",
+                    event.eventId(),
+                    event.catalog(),
+                    importFormat.fileFormat(),
+                    importFormat.listCategory() == null ? "<not required>" : importFormat.listCategory(),
+                    event.registryFile());
+            apiClient.importPersonList(
+                    event.registryFile(),
+                    importFormat.fileFormat(),
+                    importFormat.listCategory(),
+                    false
+            );
+        } catch (ZenithApiException e) {
+            if (e.isObsoletePersonListImport()) {
+                log.warn("Registry list is obsolete for Zenith and will be skipped. eventId={}, catalog={}, file={}, apiMessage={}",
+                        event.eventId(),
+                        event.catalog(),
+                        event.registryFile(),
+                        e.body());
+                return false;
+            }
+
+            throw e;
+        }
+
+        log.info("Registry list imported into Zenith. eventId={}, catalog={}, fileFormat={}, listCategory={}, file={}",
                 event.eventId(),
+                event.catalog(),
+                importFormat.fileFormat(),
+                importFormat.listCategory() == null ? "<not required>" : importFormat.listCategory(),
                 event.registryFile());
+
+        return true;
     }
 
-    private void runMassCheckIfEnabled() {
+    /** Запускает массовую проверку, если шаг включен в конфигурации. */
+    private void runMassCheckIfEnabled(String catalog) {
         ZenithConfig.MassCheck massCheck = config.getZenith().getMassCheck();
 
         if (massCheck != null && !massCheck.isEnabled()) {
@@ -75,51 +175,56 @@ public final class ZenithWorkflowService {
             return;
         }
 
-        apiClient.runMassCheck(MASS_CHECK_PERIODIC);
+        log.info("Zenith AML/CFT mass check started. catalog={}, periodic=false", catalog);
+        apiClient.runMassCheck(false);
 
-        log.info("Zenith AML/CFT mass check started. periodic={}",
-                MASS_CHECK_PERIODIC);
+        log.info("Zenith AML/CFT mass check finished. catalog={}, periodic=false", catalog);
     }
 
-    private ZenithProcessingSummary createReportIfEnabled(RegistryUpdatedEvent event) {
-        ZenithConfig.Report report = config.getZenith().getReport();
+    /** Создает отчет, выделяет новые совпадения и готовит черновики ФЭС. */
+    private ZenithProcessingSummary createReportIfEnabled(String eventId, String catalog, String idXml) {
+        ZenithConfig.Report report = config.getZenith().getReport(catalog);
 
         if (report == null || !report.isEnabled()) {
-            log.info("Zenith report creation is disabled");
-            return ZenithProcessingSummary.disabled(event.eventId());
+            log.info("Zenith report creation is disabled. catalog={}", catalog);
+            return ZenithProcessingSummary.disabled(eventId);
         }
 
         ZenithReportService reportService = new ZenithReportService(apiClient, report);
-        ZenithReportResult reportResult = reportService.createAndDownloadReport(event);
+        ZenithReportResult reportResult = reportService.createAndDownloadReport(eventId, catalog, idXml);
 
         ZenithReportAnalyzer analyzer = new ZenithReportAnalyzer();
         ZenithReportAnalysis analysis = analyzer.analyze(reportResult.reportFile());
 
         if (!analysis.hasPersons()) {
-            log.info("No terrorist matches found in Zenith report. file={}",
+            log.info("No matches found in Zenith report. catalog={}, file={}",
+                    catalog,
                     reportResult.reportFile().toAbsolutePath());
 
             return ZenithProcessingSummary.noNewPersons(
-                    event.eventId(),
+                    eventId,
                     reportResult.reportFile(),
                     0
             );
         }
 
         FoundPersonsStore personsStore = new FoundPersonsStore(
-                Path.of("data", "zenith-found-persons.tsv")
+                Path.of(config.getStorage().getFoundPersonsFile())
         );
 
         List<ZenithReportPerson> newPersons = personsStore.findNewPersons(
+                catalog,
                 analysis.persons(),
                 reportResult.endDate()
         );
 
         if (newPersons.isEmpty()) {
-            log.info("Zenith report contains known persons only. totalPersons={}",
+            log.info("Zenith report contains known persons only. catalog={}, totalPersons={}",
+                    catalog,
                     analysis.persons().size());
+
             return ZenithProcessingSummary.noNewPersons(
-                    event.eventId(),
+                    eventId,
                     reportResult.reportFile(),
                     analysis.persons().size()
             );
@@ -130,7 +235,7 @@ public final class ZenithWorkflowService {
         FesPackageService fesPackageService = new FesPackageService(fesOutputDir);
         List<FesPackage> packages = fesPackageService.preparePackages(newPersons, reportResult);
 
-        personsStore.markFesPrepared(newPersons);
+        personsStore.markFesPrepared(catalog, newPersons);
 
         List<ZenithProcessingSummary.Person> summaryPersons = new ArrayList<>();
 
@@ -146,19 +251,20 @@ public final class ZenithWorkflowService {
             ));
         }
 
-        log.warn("New terrorist list matches found. newPersons={}, packages={}",
+        log.warn("New list matches found. catalog={}, newPersons={}, packages={}",
+                catalog,
                 newPersons.size(),
                 packages.stream().map(FesPackage::directory).toList());
 
         return new ZenithProcessingSummary(
-                event.eventId(),
+                eventId,
                 true,
                 reportResult.reportFile(),
                 analysis.persons().size(),
                 newPersons.size(),
                 fesOutputDir,
                 summaryPersons,
-                "Найдены новые лица: " + newPersons.size()
+                "Найдены новые лица. Перечень: " + catalog + ", количество: " + newPersons.size()
         );
     }
 }

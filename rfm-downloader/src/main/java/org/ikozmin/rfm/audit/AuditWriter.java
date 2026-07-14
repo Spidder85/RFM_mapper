@@ -8,18 +8,21 @@ import org.slf4j.LoggerFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/** Сохраняет запросы и ответы API в файлы аудита. */
 public final class AuditWriter {
     private static final Logger log = LoggerFactory.getLogger(AuditWriter.class);
 
     private final ObjectMapper objectMapper;
     private final Path auditDir;
 
+    /** Создает writer для каталога аудита. */
     public AuditWriter(Path auditDir) {
         this.objectMapper = new ObjectMapper()
                 .enable(SerializationFeature.INDENT_OUTPUT);
         this.auditDir = auditDir;
     }
 
+    /** Сохраняет одну запись аудита, подготавливая каталог и права доступа при необходимости. */
     public void write(String fileName, AuditEnvelope envelope) {
         try {
             // создаем папку с полными правами

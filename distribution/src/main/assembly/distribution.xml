@@ -41,7 +41,7 @@
         </fileSet>
 
         <fileSet>
-            <directory>${project.parent.basedir}/rfm-downloader</directory>
+            <directory>${project.parent.basedir}/rfm-downloader/config</directory>
             <outputDirectory>config</outputDirectory>
             <includes>
                 <include>config.json</include>
@@ -49,17 +49,10 @@
         </fileSet>
 
         <fileSet>
-            <directory>${project.parent.basedir}/zenith-processor</directory>
-            <outputDirectory>config</outputDirectory>
-            <includes>
-                <include>zenith-config.json</include>
-            </includes>
-        </fileSet>
-
-        <fileSet>
             <directory>${project.parent.basedir}/zenith-processor/config</directory>
             <outputDirectory>config</outputDirectory>
             <includes>
+                <include>zenith-config.json</include>
                 <include>zenith/**</include>
             </includes>
         </fileSet>
@@ -71,6 +64,8 @@
                 <include>run-rfm.bat</include>
                 <include>run-zenith-once.bat</include>
                 <include>run-zenith-retry-failed.bat</include>
+                <include>run-zenith-watch.bat</include>
+                <include>run-zenith-drain.bat</include>
             </includes>
         </fileSet>
     </fileSets>

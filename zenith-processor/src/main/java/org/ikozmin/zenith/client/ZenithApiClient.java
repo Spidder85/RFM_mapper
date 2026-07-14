@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
 
+/** Выполняет HTTP-вызовы Zenith API: импорт, массовую проверку и выгрузку отчета. */
 public final class ZenithApiClient {
     private final ZenithConfig.Zenith config;
     private final HttpClient httpClient;
@@ -26,27 +27,41 @@ public final class ZenithApiClient {
                 .build();
     }
 
-    public void importPersonList(Path file, String fileFormat, boolean append) {
+    // Загрузка списка лиц в Zenith
+    public void importPersonList(Path file, String fileFormat, String listCategory, boolean append) {
+        if (file == null || !Files.isRegularFile(file)) {
+            throw new IllegalArgumentException("Person list file not found: " + file);
+        }
+
+        StringBuilder query = new StringBuilder()
+                .append("?file_format=")
+                .append(encode(fileFormat))
+                .append("&append=")
+                .append(append);
+
+        if (listCategory != null && !listCategory.isBlank()) {
+            query.append("&list_category=").append(encode(listCategory));
+        }
+
+        URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists" + query);
+
+        HttpRequest.BodyPublisher bodyPublisher;
+
         try {
-            if (file == null || !Files.isRegularFile(file)) {
-                throw new IllegalArgumentException("Person list file not found: " + file);
-            }
-
-            URI uri = uri("/zenith-object/api/v1/opercontrol/person_lists"
-                    + "?file_format=" + encode(fileFormat)
-                    + "&append=" + append);
-
-            HttpRequest request = base(uri)
-                    .header("Content-Type", "application/octet-stream")
-                    .POST(HttpRequest.BodyPublishers.ofFile(file))
-                    .build();
-
-            sendNoBody(request, "import person list");
+            bodyPublisher = HttpRequest.BodyPublishers.ofFile(file);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to prepare person list import request. file=" + file, e);
         }
+
+        HttpRequest request = base(uri)
+                .header("Content-Type", "application/octet-stream")
+                .POST(bodyPublisher)
+                .build();
+
+        sendNoBody(request, "import person list");
     }
 
+    // Запуск массовой проверки
     public void runMassCheck(boolean periodic) {
         String query = "?periodic=" + periodic;
 
@@ -57,6 +72,7 @@ public final class ZenithApiClient {
         sendNoBody(request, "run AML/CFT mass check");
     }
 
+    // Получение фильтра по умолчанию для отчета outDocType
     public String getReportFilter(int outDocType) {
         HttpRequest request = base(uri("/zenith-object/api/v1/outgoing_documents/" + outDocType + "/filter"))
                 .GET()
@@ -65,6 +81,7 @@ public final class ZenithApiClient {
         return sendString(request, "get report filter");
     }
 
+    // отправка запроса на создание отчета
     public OutDocLink createReport(ReportCreateData data, String filterXml) {
         String boundary = "----ZenithBoundary" + System.currentTimeMillis();
 
@@ -105,6 +122,7 @@ public final class ZenithApiClient {
         }
     }
 
+    // выгрузка документа outDocId в формате format в файл targetFile
     public void downloadOutgoingDocument(String outDocId, String format, Path targetFile) {
         try {
             Files.createDirectories(targetFile.getParent());
@@ -139,6 +157,7 @@ public final class ZenithApiClient {
         return builder;
     }
 
+    // отправка запроса в Zenith и получение ответа в виде строчки
     private String sendString(HttpRequest request, String operation) {
         try {
             HttpResponse<String> response = httpClient.send(
@@ -148,11 +167,14 @@ public final class ZenithApiClient {
 
             validate(response.statusCode(), operation, response.body());
             return response.body();
+        } catch (ZenithApiException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Zenith API call failed: " + operation, e);
         }
     }
 
+    // отправка запроса в Zenith без тела
     private void sendNoBody(HttpRequest request, String operation) {
         try {
             HttpResponse<String> response = httpClient.send(
@@ -161,24 +183,23 @@ public final class ZenithApiClient {
             );
 
             validate(response.statusCode(), operation, response.body());
+        } catch (ZenithApiException e) {
+            throw e;
         } catch (Exception e) {
             throw new IllegalStateException("Zenith API call failed: " + operation, e);
         }
     }
 
+    // проверка статуса ответа Zenith API
     private void validate(int status, String operation, String body) {
         if (status >= 200 && status < 300) {
             return;
         }
 
-        throw new IllegalStateException("Zenith API error. operation="
-                + operation
-                + ", status="
-                + status
-                + ", body="
-                + body);
+        throw new ZenithApiException(operation, status, body);
     }
 
+    // формирование URI для Zenith API
     private URI uri(String path) {
         String baseUrl = config.getBaseUrl();
 
@@ -189,6 +210,7 @@ public final class ZenithApiClient {
         return URI.create(baseUrl + path);
     }
 
+    // формирование Basic Auth для Zenith API
     private String basicAuth() {
         String value = config.getUserName() + ":" + config.getPassword();
         return "Basic " + Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));

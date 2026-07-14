@@ -6,6 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
 
+/**
+ * Сохраняет и читает итог обработки Zenith по eventId.
+ */
 public final class ProcessingSummaryStore {
     private final Path directory;
 
@@ -13,6 +16,9 @@ public final class ProcessingSummaryStore {
         this.directory = directory;
     }
 
+    /**
+     * Записывает summary, чтобы RFM мог добавить результат Zenith в итоговое уведомление.
+     */
     public Path save(ZenithProcessingSummary summary) {
         try {
             Files.createDirectories(directory);
@@ -26,6 +32,9 @@ public final class ProcessingSummaryStore {
         }
     }
 
+    /**
+     * Загружает summary по исходному eventId, если Zenith уже обработал событие.
+     */
     public Optional<ZenithProcessingSummary> load(String eventId) {
         try {
             Path file = directory.resolve(eventId + "-zenith-summary.json");

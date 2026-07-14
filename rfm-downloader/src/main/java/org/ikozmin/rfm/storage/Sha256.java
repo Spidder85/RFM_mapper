@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 
+/** Вычисляет SHA-256 файлов для контроля целостности выгрузок. */
 public final class Sha256 {
     private Sha256() {}
 

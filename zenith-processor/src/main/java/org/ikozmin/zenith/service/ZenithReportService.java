@@ -1,6 +1,5 @@
 package org.ikozmin.zenith.service;
 
-import org.ikozmin.common.event.RegistryUpdatedEvent;
 import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.slf4j.Logger;
@@ -12,15 +11,14 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
+/** Создает отчет массовой проверки Zenith и сохраняет полученный XLSX-файл. */
 public final class ZenithReportService {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportService.class);
 
-    //private static final int PODFT_REPORT_OUT_DOC_TYPE = 10217;
     private static final boolean ASSIGN_OUT_DOC_NUM = false;
     private static final long ALL_EMITENTS = -1L;
     private static final String REPORT_FORMAT = "Xlsx";
 
-    //private static final Path REPORT_FILTER_PATH = Path.of("config", "zenith", "podft-report-filter.xml");
     private static final Path STATE_FILE = Path.of("downloads", "zenith-state.properties");
 
     private final ZenithStateStore stateStore;
@@ -34,15 +32,23 @@ public final class ZenithReportService {
         this.stateStore = new ZenithStateStore(STATE_FILE);
     }
 
-    public ZenithReportResult createAndDownloadReport(RegistryUpdatedEvent event) {
+    public ZenithReportResult createAndDownloadReport(String eventId, String catalog, String idXml) {
         try {
-            LocalDate endDate = resolveCurrentCheckDate(event);
-            LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate()
+            LocalDate endDate = LocalDate.now();
+            LocalDate beginDate = stateStore.loadLastSuccessfulCheckDate(catalog)
                     .orElse(endDate);
 
             String filterXml = config.isFilter() ? loadFilterXml() : null;
 
             int outDocType = config.getOutDocType();
+
+            log.info("Creating Zenith report. eventId={}, catalog={}, outDocType={}, beginDate={}, endDate={}, filterEnabled={}",
+                    eventId,
+                    catalog,
+                    outDocType,
+                    beginDate,
+                    endDate,
+                    config.isFilter());
 
             ZenithApiClient.ReportCreateData data = new ZenithApiClient.ReportCreateData(
                     outDocType,
@@ -57,50 +63,70 @@ public final class ZenithReportService {
                     filterXml
             );
 
-            Path outputDir = Path.of(config.getOutputDirectory());
+            Path outputDir = resolveAppPath(config.getOutputDirectory());
             Files.createDirectories(outputDir);
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yy_MM_dd");
-            String fileName = "T38_"
+            String fileName = config.getFileNamePrefix()
+                    + "_"
                     + beginDate.format(formatter)
                     + "-"
                     + endDate.format(formatter)
-                    + "_терр"
-                    //+ event.idXml()
+                    + "_"
+                    + catalog
                     + ".xlsx";
 
             Path targetFile = outputDir.resolve(fileName);
 
+            log.info("Downloading Zenith report. catalog={}, outDocId={}, targetFile={}",
+                    catalog,
+                    outDoc.id(),
+                    targetFile.toAbsolutePath());
+
             apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
 
-            stateStore.saveSuccessfulCheck(endDate, event.idXml(), event.eventId());
+            stateStore.saveSuccessfulCheck(catalog, endDate, idXml, eventId);
 
-            log.info("Zenith report downloaded. outDocId={}, file={}",
+            log.info("Zenith report downloaded. catalog={}, outDocId={}, file={}",
+                    catalog,
                     outDoc.id(),
                     targetFile.toAbsolutePath());
 
             return new ZenithReportResult(targetFile, beginDate, endDate, outDoc.id());
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to create and download Zenith report", e);
+            throw new IllegalStateException("Failed to create and download Zenith report. catalog="
+                    + catalog
+                    + ", outputDirectory="
+                    + config.getOutputDirectory(), e);
         }
     }
 
     private String loadFilterXml() throws Exception {
-        Path filterPath = Path.of(config.getFilterTemplatePath());
+        Path filterPath = resolveAppPath(config.getFilterTemplatePath());
 
         if (!Files.isRegularFile(filterPath)) {
             throw new IllegalStateException("Zenith report filter file not found: "
                     + filterPath.toAbsolutePath());
         }
 
+        log.info("Loading Zenith report filter: {}", filterPath.toAbsolutePath());
+
         return Files.readString(filterPath);
     }
 
-    private LocalDate resolveCurrentCheckDate(RegistryUpdatedEvent event) {
-        if (event.downloadedAt() == null || event.downloadedAt().isBlank()) {
-            return LocalDate.now();
+    private Path resolveAppPath(String value) {
+        Path path = Path.of(value);
+
+        if (path.isAbsolute()) {
+            return path.normalize();
         }
 
-        return LocalDate.parse(event.downloadedAt().substring(0, 10));
+        String appHome = System.getProperty("app.home");
+
+        if (appHome != null && !appHome.isBlank()) {
+            return Path.of(appHome).resolve(path).normalize();
+        }
+
+        return Path.of(System.getProperty("user.dir")).resolve(path).normalize();
     }
 }

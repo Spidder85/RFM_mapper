@@ -3,6 +3,9 @@ package org.ikozmin.common.event;
 import java.nio.file.Path;
 import java.util.List;
 
+/**
+ * Краткий результат обработки события в Zenith для уведомлений и связи RFM с Zenith.
+ */
 public record ZenithProcessingSummary(
         String eventId,
         boolean processed,
@@ -23,6 +26,32 @@ public record ZenithProcessingSummary(
                 null,
                 List.of(),
                 "Отчет Zenith отключен в конфигурации"
+        );
+    }
+
+    public static ZenithProcessingSummary skipped(String eventId, String message) {
+        return new ZenithProcessingSummary(
+                eventId,
+                true,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                message
+        );
+    }
+
+    public static ZenithProcessingSummary failed(String eventId, String message) {
+        return new ZenithProcessingSummary(
+                eventId,
+                false,
+                null,
+                0,
+                0,
+                null,
+                List.of(),
+                message
         );
     }
 

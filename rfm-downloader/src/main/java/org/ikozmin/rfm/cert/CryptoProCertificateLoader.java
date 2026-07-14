@@ -9,10 +9,11 @@ import java.util.Locale;
 import org.ikozmin.rfm.config.AppConfig;
 import org.ikozmin.rfm.crypto.CryptoProProviderRegistrar;
 import org.ikozmin.rfm.exception.RfmCertificateException;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Загружает сертификат из контейнера CryptoPro для TLS-аутентификации. */
 public final class CryptoProCertificateLoader {
     private static final Logger log = LoggerFactory.getLogger(CryptoProCertificateLoader.class);
 

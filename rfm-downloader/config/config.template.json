@@ -8,15 +8,24 @@
     "UseCryptoPro": true
   },
   "DefaultCatalog": "te21",
+  "Catalogs": [
+    "te21",
+    "un",
+    "mvk"
+  ],
   "UseTestContour": false,
-  "OutputDirectory": "downloads",
+  "OutputDirectory": {
+    "Path": "\\\\t-cent\\Zen-co\\terrlist\\test\\",
+    "Catalogs": {
+      "te21": "терр_экстр",
+      "un": "Санкционные_списки_ООН",
+      "mvk": "Перечни_решМКО(МВК)"
+    }
+  },
   "Retention": {
     "Enabled": true,
     "KeepAuditDays": 60,
-    "KeepDownloadedVersions": 10,
-    "KeepProcessedEventDays": 30,
-    "KeepFailedEventDays": 180,
-    "KeepResultEventDays": 30
+    "KeepDownloadedVersions": 10
   },
   "Notifications": {
     "Enabled": false,
@@ -50,7 +59,7 @@
   },
   "ZenithTrigger": {
     "Enabled": true,
-    "Command": "run-zenith-once.bat --require-event",
+    "Command": "run-zenith-drain.bat --mode FULL",
     "WorkingDirectory": ".",
     "TimeoutSeconds": 1800
   }

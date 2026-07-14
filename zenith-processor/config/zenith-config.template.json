@@ -1,0 +1,94 @@
+{
+  "Events": {
+    "RegistryUpdatedDirectory": "events/registry-updated",
+    "ImportCompletedDirectories": [
+      "events/zenith-imported/client-main",
+      "\\\\office1-server\\rfm-events\\zenith-check",
+      "\\\\office2-server\\rfm-events\\zenith-check",
+      "\\\\office3-server\\rfm-events\\zenith-check",
+      "\\\\office4-server\\rfm-events\\zenith-check"
+    ],
+    "CheckDirectory": "events/zenith-imported/client-main"
+  },
+  "Results": {
+    "Directory": "events/registry-updated/results"
+  },
+  "Workflow": {
+    "Mode": "FULL"
+  },
+  "Zenith": {
+    "BaseUrl": "https://zenith-server/zenith-object",
+    "UserName": "ZENITH_USER",
+    "Password": "ZENITH_PASSWORD",
+    "ServerName": "",
+
+    "Import": {
+      "Enabled": true,
+      "ListCategories": {
+        "un": "PUT_ZENITH_UN_LIST_CATEGORY_HERE",
+        "mvk": "PUT_ZENITH_MVK_LIST_CATEGORY_HERE"
+      }
+    },
+
+    "MassCheck": {
+      "Enabled": true
+    },
+
+    "Reports": {
+      "te21": {
+        "Enabled": true,
+        "OutDocType": 10217,
+        "Filter": true,
+        "FilterTemplatePath": "config/zenith/podft-report-filter-te21.xml",
+        "OutputDirectory": "downloads/zenith-reports/te21",
+        "FileNamePrefix": "T38_terr"
+      },
+      "un": {
+        "Enabled": true,
+        "OutDocType": 10217,
+        "Filter": true,
+        "FilterTemplatePath": "config/zenith/podft-report-filter-un.xml",
+        "OutputDirectory": "downloads/zenith-reports/un",
+        "FileNamePrefix": "T38_un"
+      },
+      "mvk": {
+        "Enabled": true,
+        "OutDocType": 10217,
+        "Filter": true,
+        "FilterTemplatePath": "config/zenith/podft-report-filter-mvk.xml",
+        "OutputDirectory": "downloads/zenith-reports/mvk",
+        "FileNamePrefix": "T38_mvk"
+      }
+    },
+
+    "Fes": {
+      "OutputDirectory": "downloads/fes-packages"
+    }
+  },
+
+  "Notifications": {
+    "Enabled": false,
+    "Email": {
+      "Enabled": false,
+      "SmtpHost": "smtp.your-company.ru",
+      "SmtpPort": 25,
+      "SmtpUsername": "",
+      "SmtpPassword": "",
+      "UseTls": false,
+      "From": "noreply@your-company.ru",
+      "To": [
+        "operator@your-company.ru"
+      ],
+      "Subject": "Результат проверки Zenith",
+      "IncludeAttachment": false
+    },
+    "Telegram": {
+      "Enabled": false,
+      "Token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "ChatIds": [
+        "YOUR_TELEGRAM_CHAT_ID"
+      ],
+      "ApiIp": "149.154.167.220"
+    }
+  }
+}

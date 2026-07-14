@@ -10,6 +10,7 @@ import org.ikozmin.rfm.model.CatalogType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Читает и сохраняет состояние скачанных реестров в properties-файле. */
 public final class RegistryStateStore {
     private static final Logger log = LoggerFactory.getLogger(RegistryStateStore.class);
 

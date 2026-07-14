@@ -12,8 +12,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Хранит уже найденных лиц, чтобы не готовить повторные черновики ФЭС. */
 public final class FoundPersonsStore {
-    private static final String HEADER = "personKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";
+    private static final String HEADER = "catalog\tpersonKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";
+    private static final String HEADER_LEGACY = "personKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";
 
     private final Path file;
 
@@ -31,12 +33,19 @@ public final class FoundPersonsStore {
             Map<String, StoredPerson> result = new LinkedHashMap<>();
 
             for (String line : lines) {
-                if (line.isBlank() || line.equals(HEADER)) {
+                if (line.isBlank() || line.equals(HEADER) || line.equals(HEADER_LEGACY)) {
                     continue;
                 }
 
                 String[] parts = line.split("\t", -1);
-                if (parts.length < 8) {
+
+                if (parts.length == 8) {
+                    StoredPerson person = readLegacyPerson(parts);
+                    result.put(storageKey(person.catalog(), person.personKey()), person);
+                    continue;
+                }
+
+                if (parts.length < 9) {
                     continue;
                 }
 
@@ -45,12 +54,13 @@ public final class FoundPersonsStore {
                         parts[1],
                         parts[2],
                         parts[3],
-                        LocalDate.parse(parts[4]),
+                        parts[4],
                         LocalDate.parse(parts[5]),
-                        Boolean.parseBoolean(parts[6]),
-                        Boolean.parseBoolean(parts[7])
+                        LocalDate.parse(parts[6]),
+                        Boolean.parseBoolean(parts[7]),
+                        Boolean.parseBoolean(parts[8])
                 );
-                result.put(person.personKey(), person);
+                result.put(storageKey(person.catalog(), person.personKey()), person);
             }
 
             return result;
@@ -59,16 +69,18 @@ public final class FoundPersonsStore {
         }
     }
 
-    public List<ZenithReportPerson> findNewPersons(List<ZenithReportPerson> reportPersons, LocalDate foundDate) {
+    public List<ZenithReportPerson> findNewPersons(String catalog, List<ZenithReportPerson> reportPersons, LocalDate foundDate) {
         Map<String, StoredPerson> stored = load();
         List<ZenithReportPerson> newPersons = new ArrayList<>();
 
         for (ZenithReportPerson person : reportPersons) {
-            StoredPerson existing = stored.get(person.personKey());
+            String storageKey = storageKey(catalog, person.personKey());
+            StoredPerson existing = stored.get(storageKey);
 
             if (existing == null) {
                 newPersons.add(person);
-                stored.put(person.personKey(), new StoredPerson(
+                stored.put(storageKey, new StoredPerson(
+                        catalog,
                         person.personKey(),
                         person.displayName(),
                         person.normalizedName(),
@@ -79,7 +91,8 @@ public final class FoundPersonsStore {
                         false
                 ));
             } else {
-                stored.put(person.personKey(), new StoredPerson(
+                stored.put(storageKey, new StoredPerson(
+                        existing.catalog(),
                         existing.personKey(),
                         existing.displayName(),
                         existing.normalizedName(),
@@ -96,16 +109,19 @@ public final class FoundPersonsStore {
         return newPersons;
     }
 
-    public void markFesPrepared(Collection<ZenithReportPerson> persons) {
+    public void markFesPrepared(String catalog, Collection<ZenithReportPerson> persons) {
         Map<String, StoredPerson> stored = load();
 
         for (ZenithReportPerson person : persons) {
-            StoredPerson existing = stored.get(person.personKey());
+            String storageKey = storageKey(catalog, person.personKey());
+            StoredPerson existing = stored.get(storageKey);
+
             if (existing == null) {
                 continue;
             }
 
-            stored.put(person.personKey(), new StoredPerson(
+            stored.put(storageKey, new StoredPerson(
+                    existing.catalog(),
                     existing.personKey(),
                     existing.displayName(),
                     existing.normalizedName(),
@@ -119,6 +135,20 @@ public final class FoundPersonsStore {
         save(stored);
     }
 
+    private StoredPerson readLegacyPerson(String[] parts) {
+        return new StoredPerson(
+                "te21",
+                parts[0],
+                parts[1],
+                parts[2],
+                parts[3],
+                LocalDate.parse(parts[4]),
+                LocalDate.parse(parts[5]),
+                Boolean.parseBoolean(parts[6]),
+                Boolean.parseBoolean(parts[7])
+        );
+    }
+
     private void save(Map<String, StoredPerson> persons) {
         try {
             Files.createDirectories(file.getParent());
@@ -128,6 +158,7 @@ public final class FoundPersonsStore {
 
             for (StoredPerson person : persons.values()) {
                 lines.add(String.join("\t",
+                        person.catalog(),
                         person.personKey(),
                         person.displayName(),
                         person.normalizedName(),
@@ -143,5 +174,9 @@ public final class FoundPersonsStore {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to save found persons DB: " + file, e);
         }
+    }
+
+    private String storageKey(String catalog, String personKey) {
+        return catalog + "|" + personKey;
     }
 }

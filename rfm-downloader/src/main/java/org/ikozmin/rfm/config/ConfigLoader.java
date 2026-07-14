@@ -4,12 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.ikozmin.rfm.exception.RfmConfigException;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/** Читает, нормализует и проверяет конфигурацию rfm-downloader. */
 public final class ConfigLoader {
     private static final Logger log = LoggerFactory.getLogger(ConfigLoader.class);
 
@@ -28,6 +29,7 @@ public final class ConfigLoader {
             log.info("Config userName: {}", Masking.userName(userName(config)));
             log.info("Config certificate serial: {}", Masking.serial(certificateSerial(config)));
             log.info("Config default catalog: {}", defaultCatalog(config));
+            // TODO: добавить перечень передаваемых катаогов, не только тот что по умолчанию
             log.info("Config contour: {}", config.isUseTestContour() ? "test" : "prod");
 
             return config;

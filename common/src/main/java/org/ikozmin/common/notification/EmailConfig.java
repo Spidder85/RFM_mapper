@@ -1,4 +1,4 @@
-package org.ikozmin.rfm.config;
+package org.ikozmin.common.notification;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -6,6 +6,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/**
+ * Настройки SMTP-уведомлений из config.json.
+ */
 public final class EmailConfig {
     @JsonProperty("Enabled")
     private boolean enabled;
@@ -37,28 +40,43 @@ public final class EmailConfig {
     @JsonProperty("IncludeAttachment")
     private boolean includeAttachment;
 
-    @JsonProperty("IncludeFileChecksum")
-    private boolean includeFileChecksum;
+    public boolean isEnabled() {
+        return enabled;
+    }
 
-    public boolean isEnabled() { return enabled; }
+    public String getSmtpHost() {
+        return smtpHost;
+    }
 
-    public String getSmtpHost() { return smtpHost; }
+    public int getSmtpPort() {
+        return smtpPort == null ? 25 : smtpPort;
+    }
 
-    public int getSmtpPort() { return smtpPort == null ? 25 : smtpPort; }
+    public String getSmtpUsername() {
+        return smtpUsername;
+    }
 
-    public String getSmtpUsername() { return smtpUsername; }
+    public String getSmtpPassword() {
+        return smtpPassword;
+    }
 
-    public String getSmtpPassword() { return smtpPassword; }
+    public boolean isUseTls() {
+        return useTls;
+    }
 
-    public boolean isUseTls() { return useTls; }
+    public String getFrom() {
+        return from;
+    }
 
-    public String getFrom() { return from; }
+    public List<String> getTo() {
+        return to;
+    }
 
-    public List<String> getTo() { return to; }
+    public String getSubject() {
+        return subject;
+    }
 
-    public String getSubject() { return subject; }
-
-    public boolean isIncludeAttachment() { return includeAttachment; }
-
-    public boolean isIncludeFileChecksum() { return includeFileChecksum; }
+    public boolean isIncludeAttachment() {
+        return includeAttachment;
+    }
 }

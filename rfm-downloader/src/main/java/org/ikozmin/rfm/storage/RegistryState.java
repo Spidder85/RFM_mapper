@@ -1,5 +1,6 @@
 package org.ikozmin.rfm.storage;
 
+/** Локально сохраненное состояние последней версии одного реестра. */
 public final class RegistryState {
     private final String idXml;
     private final String date;

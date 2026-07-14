@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/** Извлекает из XLSX-отчета Zenith уникальные совпадения по перечню террористов. */
 public final class ZenithReportAnalyzer {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportAnalyzer.class);
 
@@ -27,6 +28,7 @@ public final class ZenithReportAnalyzer {
     private static final String EMITENT_COLUMN = "ЭМ_Наименование";
     private static final String RISK_COLUMN = "ЗЛ_РискОснования";
 
+    /** Анализирует отчет; отсутствие листа проверок означает отсутствие совпадений. */
     public ZenithReportAnalysis analyze(Path reportFile) {
         if (reportFile == null || !Files.isRegularFile(reportFile)) {
             throw new IllegalArgumentException("Zenith report file not found: " + reportFile);
@@ -37,7 +39,11 @@ public final class ZenithReportAnalyzer {
 
             Sheet sheet = workbook.getSheet(CHECKS_SHEET_NAME);
             if (sheet == null) {
-                throw new IllegalStateException("Sheet not found in Zenith report: " + CHECKS_SHEET_NAME);
+                log.info("Zenith report does not contain checks sheet. Treating report as empty. file={}, sheet={}",
+                        reportFile.toAbsolutePath(),
+                        CHECKS_SHEET_NAME);
+
+                return new ZenithReportAnalysis(reportFile, List.of());
             }
 
             Map<String, Integer> columns = readHeader(sheet.getRow(0));

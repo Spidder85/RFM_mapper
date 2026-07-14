@@ -5,7 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.ikozmin.rfm.exception.RfmApiException;
 import org.ikozmin.rfm.exception.RfmAuthException;
-import org.ikozmin.rfm.logging.Masking;
+import org.ikozmin.common.logging.Masking;
 import org.ikozmin.rfm.model.AuthRequest;
 import org.ikozmin.rfm.model.AuthResponse;
 import org.ikozmin.rfm.model.CatalogInfo;
@@ -27,6 +27,7 @@ import org.ikozmin.rfm.model.DownloadedFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/** Реализует вызовы API Росфинмониторинга: аутентификацию, каталог и загрузку реестра. */
 public final class RfmApiClient implements RfmClient {
     private static final Logger log = LoggerFactory.getLogger(RfmApiClient.class);
 

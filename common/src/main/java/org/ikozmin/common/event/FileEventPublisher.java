@@ -6,6 +6,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
+/**
+ * Публикует события в файловую очередь, создавая JSON-файл в подпапке new.
+ */
 public final class FileEventPublisher {
     private final Path newDir;
 
@@ -14,11 +17,22 @@ public final class FileEventPublisher {
     }
 
     public Path publish(RegistryUpdatedEvent event) {
+        return publish(event.eventId(), event);
+    }
+
+    /**
+     * Сохраняет событие завершенного импорта Zenith для офисной проверки.
+     */
+    public Path publish(ZenithImportCompletedEvent event) {
+        return publish(event.eventId(), event);
+    }
+
+    public Path publish(String eventId, Object event) {
         try {
             Files.createDirectories(newDir);
 
-            Path tempFile = newDir.resolve(event.eventId() + ".json.tmp");
-            Path finalFile = newDir.resolve(event.eventId() + ".json");
+            Path tempFile = newDir.resolve(eventId + ".json.tmp");
+            Path finalFile = newDir.resolve(eventId + ".json");
 
             JsonMapper.get()
                     .writerWithDefaultPrettyPrinter()
@@ -28,7 +42,7 @@ public final class FileEventPublisher {
 
             return finalFile;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to publish registry update event", e);
+            throw new IllegalStateException("Failed to publish event", e);
         }
     }
 }

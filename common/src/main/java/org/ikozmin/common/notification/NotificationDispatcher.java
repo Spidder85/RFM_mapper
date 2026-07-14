@@ -1,28 +1,28 @@
-package org.ikozmin.rfm.service;
+package org.ikozmin.common.notification;
 
-import org.ikozmin.common.notification.NotificationMessage;
-import org.ikozmin.common.notification.NotificationSender;
-import org.ikozmin.rfm.config.NotificationsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
-public final class NotificationService {
-    private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
+/**
+ * Единая точка отправки уведомлений во все включенные каналы.
+ */
+public final class NotificationDispatcher {
+    private static final Logger log = LoggerFactory.getLogger(NotificationDispatcher.class);
 
     private final NotificationsConfig config;
     private final List<NotificationSender> senders;
 
-    public NotificationService(NotificationsConfig config) {
+    public NotificationDispatcher(NotificationsConfig config) {
         this.config = config;
 
         if (config == null) {
-            this.senders = List.of();
+            this.senders = null;
         } else {
             this.senders = List.of(
-                    new EmailNotificationService(config.getEmail()),
-                    new TelegramNotificationService(config.getTelegram())
+                    new EmailNotificationSender(config.getEmail()),
+                    new TelegramNotificationSender(config.getTelegram())
             );
         }
     }
@@ -31,6 +31,9 @@ public final class NotificationService {
         return config != null && config.isEnabled();
     }
 
+    /**
+     * Передает сообщение каждому включенному sender-у.
+     */
     public void send(NotificationMessage message) {
         if (!isEnabled()) {
             return;

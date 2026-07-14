@@ -1,4 +1,4 @@
-package org.ikozmin.rfm.config;
+package org.ikozmin.common.notification;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -6,6 +6,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/**
+ * Настройки Telegram-уведомлений из config.json.
+ */
 public final class TelegramConfig {
     @JsonProperty("Enabled")
     private boolean enabled;
@@ -16,19 +19,20 @@ public final class TelegramConfig {
     @JsonProperty("ChatIds")
     private List<String> chatIds;
 
-    @JsonProperty("IncludeFileChecksum")
-    private boolean includeFileChecksum;
-
     @JsonProperty("ApiIp")
     private String apiIp;
 
-    public boolean isEnabled() { return enabled; }
+    public boolean isEnabled() {
+        return enabled;
+    }
 
-    public String getToken() { return token; }
+    public String getToken() {
+        return token;
+    }
 
-    public List<String> getChatIds() { return chatIds; }
-
-    public boolean isIncludeFileChecksum() { return includeFileChecksum; }
+    public List<String> getChatIds() {
+        return chatIds;
+    }
 
     public String getApiIp() {
         return apiIp;
