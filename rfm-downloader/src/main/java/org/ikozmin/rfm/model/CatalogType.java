@@ -2,6 +2,7 @@ package org.ikozmin.rfm.model;
 
 import java.util.Locale;
 
+/** Поддерживаемые типы перечней и их параметры API/файловой выгрузки. */
 public enum CatalogType {
     TE2("te2", "suspect", "zip"),
     TE21("te21", "suspect", "zip"),

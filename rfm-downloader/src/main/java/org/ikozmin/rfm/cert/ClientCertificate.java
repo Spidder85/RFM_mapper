@@ -2,6 +2,7 @@ package org.ikozmin.rfm.cert;
 
 import java.security.KeyStore;
 
+/** Объединяет выбранный сертификат, закрытый ключ и цепочку для TLS-клиента. */
 public final class ClientCertificate {
     private final KeyStore keyStore;
     private final String alias;

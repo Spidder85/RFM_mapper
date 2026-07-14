@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
+/** Запускает zenith-processor отдельным процессом после появления новых реестров. */
 public final class ZenithProcessorTrigger {
     private static final Logger log = LoggerFactory.getLogger(ZenithProcessorTrigger.class);
 

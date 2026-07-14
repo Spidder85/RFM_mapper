@@ -9,6 +9,7 @@ import org.ikozmin.rfm.exception.RfmCertificateException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** Регистрирует JCP, JCSP и JTLS провайдеры CryptoPro в JVM. */
 public final class CryptoProProviderRegistrar {
     private static final Logger log = LoggerFactory.getLogger(CryptoProProviderRegistrar.class);
 

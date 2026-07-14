@@ -19,6 +19,7 @@ import java.security.SecureRandom;
 import java.security.Security;
 import java.time.Duration;
 
+/** Создает настроенный HTTP-клиент с TLS-контекстом и клиентским сертификатом. */
 public final class RfmHttpClientFactory {
     private static final Logger log = LoggerFactory.getLogger(RfmHttpClientFactory.class);
 

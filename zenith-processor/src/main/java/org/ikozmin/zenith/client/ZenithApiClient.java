@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
 
+/** Выполняет HTTP-вызовы Zenith API: импорт, массовую проверку и выгрузку отчета. */
 public final class ZenithApiClient {
     private final ZenithConfig.Zenith config;
     private final HttpClient httpClient;

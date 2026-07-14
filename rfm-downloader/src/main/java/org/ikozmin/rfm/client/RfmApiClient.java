@@ -27,6 +27,7 @@ import org.ikozmin.rfm.model.DownloadedFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
+/** Реализует вызовы API Росфинмониторинга: аутентификацию, каталог и загрузку реестра. */
 public final class RfmApiClient implements RfmClient {
     private static final Logger log = LoggerFactory.getLogger(RfmApiClient.class);
 

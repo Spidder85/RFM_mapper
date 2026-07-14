@@ -1,5 +1,6 @@
 package org.ikozmin.rfm.exception;
 
+/** Ошибка HTTP-взаимодействия с API Росфинмониторинга. */
 public final class RfmApiException extends RuntimeException {
     private final int statusCode;
     private final String responseBody;

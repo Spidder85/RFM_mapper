@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+/** Хранит уже найденных лиц, чтобы не готовить повторные черновики ФЭС. */
 public final class FoundPersonsStore {
     private static final String HEADER = "catalog\tpersonKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";
     private static final String HEADER_LEGACY = "personKey\tdisplayName\tnormalizedName\taccountNumber\tfirstFoundDate\tlastFoundDate\tfesPrepared\tfesSent";

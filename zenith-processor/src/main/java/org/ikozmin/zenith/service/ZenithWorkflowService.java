@@ -20,6 +20,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Выполняет бизнес-сценарии Zenith: импорт реестра, проверку, отчет и подготовку ФЭС. */
 public final class ZenithWorkflowService {
     private static final Logger log = LoggerFactory.getLogger(ZenithWorkflowService.class);
 
@@ -33,6 +34,7 @@ public final class ZenithWorkflowService {
         this.importFormatResolver = new ZenithImportFormatResolver();
     }
 
+    /** Выполняет полный центральный цикл: импорт, публикацию офисных событий, проверку и отчет. */
     public ZenithProcessingSummary processFull(RegistryUpdatedEvent event) {
         log.info("Processing full Zenith workflow. eventId={}, catalog={}, file={}",
                 event.eventId(),
@@ -63,6 +65,7 @@ public final class ZenithWorkflowService {
         return summary;
     }
 
+    /** Импортирует реестр и сообщает офисам, что можно запускать проверку. */
     public ZenithProcessingSummary processImportOnly(RegistryUpdatedEvent event) {
         log.info("Processing Zenith import only. eventId={}, catalog={}, file={}",
                 event.eventId(),
@@ -93,6 +96,7 @@ public final class ZenithWorkflowService {
         );
     }
 
+    /** Выполняет только массовую проверку и подготовку отчета по офисному событию. */
     public ZenithProcessingSummary processCheckOnly(ZenithImportCompletedEvent event) {
         log.info("Processing Zenith check only. eventId={}, sourceEventId={}, catalog={}",
                 event.eventId(),
@@ -112,6 +116,7 @@ public final class ZenithWorkflowService {
         return summary;
     }
 
+    /** Импортирует файл реестра и отдельно обрабатывает штатный ответ о неактуальном списке. */
     private boolean importPersonListIfEnabled(RegistryUpdatedEvent event) {
         ZenithConfig.Import importConfig = config.getZenith().getImportConfig();
 
@@ -155,6 +160,7 @@ public final class ZenithWorkflowService {
         return true;
     }
 
+    /** Запускает массовую проверку, если шаг включен в конфигурации. */
     private void runMassCheckIfEnabled(String catalog) {
         ZenithConfig.MassCheck massCheck = config.getZenith().getMassCheck();
 
@@ -169,6 +175,7 @@ public final class ZenithWorkflowService {
         log.info("Zenith AML/CFT mass check finished. catalog={}, periodic=false", catalog);
     }
 
+    /** Создает отчет, выделяет новые совпадения и готовит черновики ФЭС. */
     private ZenithProcessingSummary createReportIfEnabled(String eventId, String catalog, String idXml) {
         ZenithConfig.Report report = config.getZenith().getReport(catalog);
 

@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Properties;
 
+/** Хранит служебное состояние Zenith между запусками. */
 public final class ZenithStateStore {
     private final Path file;
 

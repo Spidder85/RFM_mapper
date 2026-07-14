@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+/** Проверяет, что скачанный файл соответствует ожидаемому формату реестра. */
 public final class RegistryFileValidator {
     private static final Logger log = LoggerFactory.getLogger(RegistryFileValidator.class);
 

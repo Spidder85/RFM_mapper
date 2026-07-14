@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.concurrent.Callable;
 
+/** Повторяет временно неуспешные операции API с заданной паузой. */
 public final class RetryPolicy {
     private static final Logger log = LoggerFactory.getLogger(RetryPolicy.class);
 

@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Публикует события для офисных Zenith после успешного центрального импорта реестра. */
 public final class ZenithImportEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(ZenithImportEventPublisher.class);
 

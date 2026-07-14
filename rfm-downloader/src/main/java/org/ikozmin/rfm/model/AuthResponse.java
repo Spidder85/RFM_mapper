@@ -3,6 +3,7 @@ package org.ikozmin.rfm.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** DTO ответа аутентификации API Росфинмониторинга. */
 public final class AuthResponse {
     private Value value;
     private boolean success;

@@ -10,6 +10,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.stream.Stream;
 
+/**
+ * Удаляет технологические следы завершенной обработки событий после заданного срока хранения.
+ */
 public final class EventRetentionService {
     private static final Logger log = LoggerFactory.getLogger(EventRetentionService.class);
 
@@ -23,14 +26,17 @@ public final class EventRetentionService {
 
     private final int keepDays;
 
+    /** Создает сервис с единым сроком хранения событий в 30 дней. */
     public EventRetentionService() {
         this(DEFAULT_KEEP_DAYS);
     }
 
+    /** Создает сервис с указанным сроком хранения, не менее одного дня. */
     public EventRetentionService(int keepDays) {
         this.keepDays = Math.max(1, keepDays);
     }
 
+    /** Очищает каталоги processed, failed и results конкретной очереди событий. */
     public void apply(Path eventRootDir) {
         if (eventRootDir == null) {
             return;
@@ -41,6 +47,7 @@ public final class EventRetentionService {
         }
     }
 
+    /** Удаляет из одного служебного каталога файлы старше пороговой даты. */
     private void clean(Path directory) {
         if (!Files.isDirectory(directory)) {
             return;
@@ -61,6 +68,7 @@ public final class EventRetentionService {
         }
     }
 
+    /** Проверяет дату изменения файла без прерывания основной обработки при ошибке файловой системы. */
     private boolean isOlderThan(Path file, Instant threshold) {
         try {
             return Files.getLastModifiedTime(file).toInstant().isBefore(threshold);
@@ -69,6 +77,7 @@ public final class EventRetentionService {
         }
     }
 
+    /** Удаляет устаревший файл и фиксирует неудачу только в журнале. */
     private void deleteQuietly(Path file) {
         try {
             Files.deleteIfExists(file);

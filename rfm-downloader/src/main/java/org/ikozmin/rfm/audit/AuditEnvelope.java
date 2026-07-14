@@ -2,6 +2,7 @@ package org.ikozmin.rfm.audit;
 
 import java.time.LocalDateTime;
 
+/** Запись аудита одного HTTP-вызова API Росфинмониторинга. */
 public final class AuditEnvelope {
     private final String createdAt;
     private final String method;
@@ -11,6 +12,7 @@ public final class AuditEnvelope {
     private final String responseBody;
     private final String note;
 
+    /** Создает полную запись запроса, ответа и диагностической заметки. */
     public AuditEnvelope(
             String createdAt,
             String method,

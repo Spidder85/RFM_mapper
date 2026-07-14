@@ -5,6 +5,7 @@ import org.ikozmin.rfm.exception.RfmAuthException;
 import org.ikozmin.rfm.exception.RfmCertificateException;
 import org.ikozmin.rfm.exception.RfmConfigException;
 
+/** Коды завершения rfm-downloader для планировщика и bat-скриптов. */
 public enum ExitCode {
     OK(0),
     GENERAL_ERROR(1),
@@ -23,6 +24,7 @@ public enum ExitCode {
         return code;
     }
 
+    /** Сопоставляет исключение верхнего уровня с кодом завершения приложения. */
     public static ExitCode from(Throwable throwable) {
         if (throwable instanceof RfmConfigException) {
             return CONFIG_ERROR;

@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+/** Извлекает из XLSX-отчета Zenith уникальные совпадения по перечню террористов. */
 public final class ZenithReportAnalyzer {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportAnalyzer.class);
 
@@ -27,6 +28,7 @@ public final class ZenithReportAnalyzer {
     private static final String EMITENT_COLUMN = "ЭМ_Наименование";
     private static final String RISK_COLUMN = "ЗЛ_РискОснования";
 
+    /** Анализирует отчет; отсутствие листа проверок означает отсутствие совпадений. */
     public ZenithReportAnalysis analyze(Path reportFile) {
         if (reportFile == null || !Files.isRegularFile(reportFile)) {
             throw new IllegalArgumentException("Zenith report file not found: " + reportFile);

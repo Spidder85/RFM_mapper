@@ -4,6 +4,7 @@ import org.ikozmin.zenith.config.ZenithConfig;
 
 import java.util.Locale;
 
+/** Выбирает формат импорта Zenith по коду реестра, а не по пользовательской настройке. */
 public final class ZenithImportFormatResolver {
     public ImportFormat resolve(String catalog, ZenithConfig.Import importConfig) {
         String normalize = catalog == null

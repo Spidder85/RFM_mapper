@@ -3,6 +3,7 @@ package org.ikozmin.rfm.model;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Метаданные текущей версии реестра, полученные из API. */
 public final class CatalogInfo {
     private String date;
     private Boolean isActive;

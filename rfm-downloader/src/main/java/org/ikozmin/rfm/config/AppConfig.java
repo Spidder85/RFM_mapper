@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Корневая модель пользовательского конфигурационного файла rfm-downloader. */
 public final class AppConfig {
     @JsonProperty("Credentials")
     private Credentials credentials;

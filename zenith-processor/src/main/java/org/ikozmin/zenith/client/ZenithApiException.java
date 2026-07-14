@@ -1,5 +1,6 @@
 package org.ikozmin.zenith.client;
 
+/** Ошибка ответа Zenith API с сохранением операции, HTTP-статуса и тела ответа. */
 public final class ZenithApiException extends RuntimeException {
     private final String operation;
     private final int status;

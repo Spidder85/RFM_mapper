@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
+/** Создает отчет массовой проверки Zenith и сохраняет полученный XLSX-файл. */
 public final class ZenithReportService {
     private static final Logger log = LoggerFactory.getLogger(ZenithReportService.class);
 

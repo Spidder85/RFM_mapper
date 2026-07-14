@@ -1,5 +1,6 @@
 package org.ikozmin.rfm.model;
 
+/** DTO запроса аутентификации в API Росфинмониторинга. */
 public final class AuthRequest {
     private final String userName;
     private final String password;

@@ -48,6 +48,9 @@ import java.util.concurrent.Callable;
         mixinStandardHelpOptions = true,
         description = "Downloads Rosfinmonitoring registry updates"
 )
+/**
+ * Точка входа rfm-downloader: скачивает обновленные реестры, публикует события и запускает последующую обработку.
+ */
 public final class Main implements Callable<Integer> {
     private static final Logger log = LoggerFactory.getLogger(Main.class);
 
@@ -66,12 +69,14 @@ public final class Main implements Callable<Integer> {
     @Option(names = "--contour", description = "Contour: prod or test")
     private String contourValue;
 
+    /** Запускает CLI и завершает процесс с кодом результата. */
     public static void main(String[] args) {
         int exitCode = new CommandLine(new Main()).execute(args);
         System.exit(exitCode);
     }
 
     @Override
+    /** Выполняет команду и преобразует исключения в понятные коды завершения. */
     public Integer call() {
         try {
             run();
@@ -84,6 +89,7 @@ public final class Main implements Callable<Integer> {
         }
     }
 
+    /** Выполняет один полный цикл проверки и скачивания настроенных реестров. */
     private void run() throws Exception {
         ConfigLoader configLoader = new ConfigLoader();
         AppConfig config = configLoader.load(configPath);
@@ -200,6 +206,7 @@ public final class Main implements Callable<Integer> {
         applyRetentionIfNeeded(config, workDir, downloadDir, catalogTypes);
     }
 
+    /** Публикует файловое событие только для успешно скачанного реестра. */
     private PublishedRegistryEvent publishRegistryEvent(AppConfig config, UpdateResult result) {
         Path eventRootDir = Path.of(config.getEvents() == null
                 ? "events/registry-updated"
@@ -216,6 +223,7 @@ public final class Main implements Callable<Integer> {
         return publishedEvent;
     }
 
+    /** Запускает Zenith после появления новых реестров, если это разрешено конфигурацией. */
     private void runZenithProcessorIfNeeded(AppConfig config, List<PublishedRegistryUpdate> publishedUpdates) {
         if (publishedUpdates == null || publishedUpdates.isEmpty()) {
             return;
@@ -239,6 +247,7 @@ public final class Main implements Callable<Integer> {
         trigger.runOnce(suppressZenithNotification);
     }
 
+    /** Определяет каталог выгрузки, подставляя локальный downloads при отсутствии настройки. */
     private Path resolveDownloadDir(AppConfig config) {
         AppConfig.OutputConfig output = config.getOutputDirectory();
 
@@ -250,6 +259,7 @@ public final class Main implements Callable<Integer> {
         return Path.of(output.getPath().trim());
     }
 
+    /** Возвращает пользовательское соответствие кодов реестров и имен папок. */
     private Map<String, String> resolveCatalogFolderMapping(AppConfig config) {
         AppConfig.OutputConfig output = config.getOutputDirectory();
 
@@ -260,6 +270,7 @@ public final class Main implements Callable<Integer> {
         return output.getCatalogs();
     }
 
+    /** Создает каталоги реестров до первой выгрузки. */
     private void createCatalogDirectories(Path downloadDir, Map<String, String> catalogMapping) throws Exception {
         for (String folderName : catalogMapping.values()) {
             if (folderName != null && !folderName.isBlank()) {
@@ -268,6 +279,7 @@ public final class Main implements Callable<Integer> {
         }
     }
 
+    /** Формирует одно итоговое уведомление по всем обновлениям текущего запуска. */
     private void sendNotificationIfNeeded(AppConfig config, List<RegistryNotificationItem> notificationItems) {
         if (notificationItems == null || notificationItems.isEmpty()) {
             return;
@@ -288,6 +300,7 @@ public final class Main implements Callable<Integer> {
         }
     }
 
+    /** Применяет правила хранения файлов, аудита и завершенных событий. */
     private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, List<CatalogType> catalogTypes) {
         RetentionService retentionService = new RetentionService(config.getRetention());
 
@@ -307,6 +320,7 @@ public final class Main implements Callable<Integer> {
         new EventRetentionService().apply(eventRootDir);
     }
 
+    /** Загружает результат Zenith, чтобы включить его в единое уведомление RFM. */
     private Optional<ZenithProcessingSummary> loadZenithSummary(AppConfig config, String eventId) {
         Path eventRootDir = Path.of(config.getEvents() == null
                 ? "events/registry-updated"
@@ -318,6 +332,7 @@ public final class Main implements Callable<Integer> {
         return new ProcessingSummaryStore(summaryDir).load(eventId);
     }
 
+    /** Выбирает реестры из CLI, списка в конфигурации либо значения по умолчанию. */
     private List<CatalogType> resolveCatalogs(AppConfig config, ConfigLoader configLoader) {
         if (catalog != null && !catalog.isBlank()) {
             return List.of(CatalogType.from(catalog));
@@ -335,6 +350,7 @@ public final class Main implements Callable<Integer> {
         return List.of(CatalogType.from(configLoader.defaultCatalog(config)));
     }
 
+    /** Выбирает тестовый или продуктивный контур и запрещает противоречивые CLI-аргументы. */
     private Contour resolveContour(AppConfig config) {
         int specified = 0;
 

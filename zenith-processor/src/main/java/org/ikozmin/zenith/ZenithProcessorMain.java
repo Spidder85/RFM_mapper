@@ -28,6 +28,9 @@ import java.util.concurrent.Callable;
         mixinStandardHelpOptions = true,
         description = "Processes registry update events and imports them into Zenith"
 )
+/**
+ * Точка входа zenith-processor: читает события, запускает workflow и сохраняет итог обработки.
+ */
 public final class ZenithProcessorMain implements Callable<Integer> {
     private static final Logger log = LoggerFactory.getLogger(ZenithProcessorMain.class);
     private static final int EXIT_OK = 0;
@@ -59,12 +62,14 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     @Option(names = "--suppress-notification", description = "Do not send Zenith notification for this run")
     private boolean suppressNotification;
 
+    /** Запускает CLI и завершает процесс с кодом выполненной команды. */
     public static void main(String[] args) {
         int exitCode = new CommandLine(new ZenithProcessorMain()).execute(args);
         System.exit(exitCode);
     }
 
     @Override
+    /** Загружает конфигурацию и запускает выбранный режим обработки событий. */
     public Integer call() {
         try {
             ZenithConfig config = new ZenithConfigLoader().load(configPath);
@@ -91,6 +96,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
     }
 
+    /** Бесконечно опрашивает очередь с заданной в конфигурации периодичностью. */
     private void runWatch(ZenithConfig config, ZenithWorkflowMode workflowMode) throws InterruptedException {
         Duration delay = Duration.ofSeconds(config.getWorkflow().getPollIntervalSeconds());
 
@@ -111,6 +117,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
     }
 
+    /** Обрабатывает всю доступную очередь, не останавливаясь на ошибке отдельного события. */
     private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
         int processed = 0;
         int failed = 0;
@@ -136,6 +143,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
     }
 
+    /** Обрабатывает одно событие с учетом CLI-флага require-event. */
     private Integer processOnce(ZenithConfig config, ZenithWorkflowMode workflowMode) {
         return processOnce(config, workflowMode, requireEvent);
     }
@@ -148,6 +156,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         };
     }
 
+    /** Берет событие обновления реестра и выполняет импорт либо полный workflow. */
     private Integer processRegistryUpdatedEvent(
             ZenithConfig config,
             ZenithWorkflowMode workflowMode,
@@ -204,6 +213,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         }
     }
 
+    /** Берет офисное событие после импорта и выполняет только массовую проверку. */
     private Integer processImportCompletedEvent(ZenithConfig config, boolean requireEventForIteration) {
         ZenithImportCompletedEventConsumer consumer = new ZenithImportCompletedEventConsumer(
                 Path.of(config.getEvents().getCheckDirectory())
@@ -249,6 +259,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         return EXIT_NO_EVENTS;
     }
 
+    /** Сохраняет summary, который затем использует RFM или самостоятельное уведомление Zenith. */
     private void saveSummary(ZenithConfig config, ZenithProcessingSummary summary) {
         ProcessingSummaryStore summaryStore = new ProcessingSummaryStore(
                 Path.of(config.getResults().getDirectory())
@@ -282,6 +293,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         return config.getWorkflow().getMode();
     }
 
+    /** Отправляет самостоятельное уведомление Zenith, если оно не подавлено основным запуском RFM. */
     private void sendNotificationIfNeeded(ZenithConfig config, String catalog, ZenithProcessingSummary summary) {
         if (suppressNotification) {
             log.info("Zenith notification is suppressed by command line option");
@@ -298,6 +310,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         dispatcher.send(message);
     }
 
+    /** Очищает завершенные события всех очередей, доступных данному экземпляру Zenith. */
     private void applyEventRetention(ZenithConfig config) {
         EventRetentionService retentionService = new EventRetentionService();
 

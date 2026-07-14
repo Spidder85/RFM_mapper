@@ -3,6 +3,7 @@ package org.ikozmin.zenith.client;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 
+/** Собирает multipart/form-data тело для HTTP-вызовов Zenith API. */
 public final class MultipartBodyBuilder {
     private final String boundary;
     private final ByteArrayOutputStream output = new ByteArrayOutputStream();

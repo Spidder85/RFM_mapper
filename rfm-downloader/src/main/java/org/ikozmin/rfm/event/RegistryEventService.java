@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/** Преобразует успешное обновление реестра в событие файловой очереди. */
 public final class RegistryEventService {
     private final FileEventPublisher publisher;
 

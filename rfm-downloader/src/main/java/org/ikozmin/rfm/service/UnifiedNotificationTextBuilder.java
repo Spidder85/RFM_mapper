@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+/** Формирует единое понятное пользователю уведомление RFM с результатами Zenith. */
 public final class UnifiedNotificationTextBuilder {
     private final ZenithNotificationTextBuilder zenithTextBuilder = new ZenithNotificationTextBuilder();
 

@@ -3,6 +3,7 @@ package org.ikozmin.rfm.client;
 import org.ikozmin.rfm.exception.RfmApiException;
 import org.ikozmin.rfm.model.CatalogType;
 
+/** Проверяет HTTP-ответы API и преобразует ошибочные статусы в доменные исключения. */
 public final class ResponseValidator {
     public void validateFileResponse(CatalogType catalogType, int statusCode, String contentType, long size) {
         if (statusCode < 200 || statusCode >= 300) {

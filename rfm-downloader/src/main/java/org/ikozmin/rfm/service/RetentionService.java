@@ -13,6 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
+/** Удаляет устаревшие выгрузки и файлы аудита согласно политике хранения. */
 public final class RetentionService {
     private static final Logger log = LoggerFactory.getLogger(RetentionService.class);
 

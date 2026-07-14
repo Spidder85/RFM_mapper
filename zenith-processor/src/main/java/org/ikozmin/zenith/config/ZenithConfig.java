@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Корневая модель пользовательской конфигурации zenith-processor. */
 public final class ZenithConfig {
     @JsonProperty("Events")
     private Events events;

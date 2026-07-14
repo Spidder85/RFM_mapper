@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+/** Создает структуру черновиков ФЭС для новых совпадений из отчета Zenith. */
 public final class FesPackageService {
     private static final DateTimeFormatter DATE = DateTimeFormatter.BASIC_ISO_DATE;
 

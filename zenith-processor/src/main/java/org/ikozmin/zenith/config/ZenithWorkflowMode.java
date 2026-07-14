@@ -2,6 +2,7 @@ package org.ikozmin.zenith.config;
 
 import java.util.Locale;
 
+/** Режимы Zenith: полный цикл, только импорт и только проверка. */
 public enum ZenithWorkflowMode {
     IMPORT_ONLY,
     CHECK_ONLY,

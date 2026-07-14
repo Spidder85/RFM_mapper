@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+/** Настройки запуска zenith-processor после загрузки новых реестров. */
 public final class ZenithTriggerConfig {
     @JsonProperty("Enabled")
     private boolean enabled;

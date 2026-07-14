@@ -2,6 +2,7 @@ package org.ikozmin.rfm.model;
 
 import java.nio.file.Path;
 
+/** Результат скачивания файла реестра во временный путь. */
 public final class DownloadedFile {
     private final Path path;
     private final String contentType;
