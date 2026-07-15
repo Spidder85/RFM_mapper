@@ -3,30 +3,44 @@ package org.ikozmin.common.notification;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Формирует человекочитаемый текст результатов Zenith для standalone и RFM-уведомлений.
  */
 public final class ZenithNotificationTextBuilder {
     /**
-     * Собирает отдельное уведомление, когда Zenith запускается автономно.
+     * Собирает одно итоговое уведомление по всем перечням, обработанным в запуске Zenith.
      */
-    public NotificationMessage buildStandalone(String catalog, ZenithProcessingSummary summary) {
-        String subject = "Результат проверки Zenith: " + displayCatalogName(catalog);
-        String lineSeparator = System.lineSeparator();
-        StringBuilder body = new StringBuilder();
+    public NotificationMessage buildStandalone(List<ZenithNotificationItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Zenith notification items are empty");
+        }
 
+        String lineSeparator = System.lineSeparator();
+        String subject = items.size() == 1
+                ? "Результат проверки Zenith: " + displayCatalogName(items.getFirst().catalog())
+                : "Результаты проверки Zenith: " + items.size() + " перечня(ей)";
+
+        StringBuilder body = new StringBuilder();
         body.append("Здравствуйте.").append(lineSeparator);
         body.append(lineSeparator);
         body.append("Завершена проверка в Zenith.").append(lineSeparator);
+        body.append("Обработано перечней: ").append(items.size()).append(lineSeparator);
         body.append(lineSeparator);
-        body.append("Перечень: ").append(displayCatalogName(catalog)).append(lineSeparator);
 
-        appendReportFile(body, summary, lineSeparator);
+        for (int index = 0; index < items.size(); index++) {
+            ZenithNotificationItem item = items.get(index);
 
-        body.append(lineSeparator);
-        appendResultBlock(body, "", summary);
-        body.append(lineSeparator);
+            body.append(index+1)
+                    .append(". Перечень: ")
+                    .append(displayCatalogName(item.catalog()))
+                    .append(lineSeparator);
+
+            appendReportFile(body, item.summary(), lineSeparator);
+            appendResultBlock(body, "    ", item.summary());
+            body.append(lineSeparator);
+        }
         body.append("Это автоматическое уведомление. Не надо на него отвечать.").append(lineSeparator);
 
         return new NotificationMessage(subject, body.toString());
