@@ -1,45 +1,37 @@
-# Доработка от 2026-07-14: единое уведомление автономного Zenith
+# Трехэтапный запуск и уведомления Zenith
 
-## Что уже реализовано
+Дата: 2026-07-16.
 
-1. RFM формирует одно общее уведомление для нескольких обновленных реестров.
-2. При запуске Zenith из RFM отдельное уведомление Zenith подавляется параметром `--suppress-notification`.
-3. Для RFM и Zenith используется общий построитель текстового блока `ZenithNotificationTextBuilder`.
-4. Пустой XLSX-отчет без листа `Таблица_Проверок` не считается ошибкой.
-5. Ошибка одного события не останавливает `--drain`; событие переносится в `failed`.
-6. Завершенные events очищаются через 30 дней.
-7. Старые TODO от 13.07, помеченные `[x]`, повторно реализовывать не нужно.
+Эта инструкция описывает только необходимую доработку уведомлений для трех серверов. Технические сведения (`idXml`, путь, SHA-256, размер файла) в уведомления не выводятся: они уже сохранены в событиях и журналах.
 
-## Проблема
-
-При автономном запуске:
-
-```bat
-run-zenith-drain.bat --mode CHECK_ONLY
-```
-
-`ZenithProcessorMain` получает событие, сразу вызывает `sendNotificationIfNeeded(...)`, затем берет следующее. Поэтому для трех реестров уходят три письма/сообщения.
-
-Нужный результат:
+## Целевая схема
 
 ```text
-CHECK_ONLY + --drain
-  событие te21 ┐
-  событие un   ├─> одно итоговое уведомление после разбора очереди
-  событие mvk  ┘
+Сервер 1: rfm-downloader
+  скачивание реестров
+  -> RegistryUpdated
+
+Сервер 2: zenith-processor --drain --mode IMPORT_ONLY
+  загрузка реестров в Zenith
+  -> ZenithImportCompleted
+  -> одно уведомление: «реестры загружены в Zenith»
+
+Сервер 3: zenith-processor --drain --mode CHECK_ONLY
+  массовая проверка, XLSX-отчет, анализ, черновики ФЭС
+  -> одно уведомление: «результаты проверки Zenith»
 ```
 
-`--once` продолжает отправлять одно уведомление по одному событию. `--watch` обрабатывает события по мере появления, поэтому отправляет одно уведомление за одну итерацию; это корректно для постоянно работающего процесса.
+На сервере 3 должен использоваться именно `CHECK_ONLY`, а не `FULL`: импорт уже был выполнен сервером 2.
 
-## 1. Добавить элемент пакетного уведомления
+## 1. Что остается без изменений
 
-Создать файл:
+Файл:
 
 ```text
 common/src/main/java/org/ikozmin/common/notification/ZenithNotificationItem.java
 ```
 
-Код файла полностью:
+Не менять. Его полный актуальный код:
 
 ```java
 package org.ikozmin.common.notification;
@@ -56,9 +48,9 @@ public record ZenithNotificationItem(
 }
 ```
 
-Зачем: класс отделяет накопление результатов запуска от их доставки. `ZenithProcessorMain` больше не должен отправлять сообщение посреди разбора очереди.
+Этого достаточно: код перечня нужен для понятного названия, а `summary` хранит результат операции. Технические данные события не копируются в уведомление.
 
-## 2. Обновить ZenithNotificationTextBuilder
+## 2. Обновить текст уведомлений Zenith
 
 Файл:
 
@@ -66,69 +58,288 @@ public record ZenithNotificationItem(
 common/src/main/java/org/ikozmin/common/notification/ZenithNotificationTextBuilder.java
 ```
 
-Добавить импорт:
+Заменить файл полностью:
 
 ```java
+package org.ikozmin.common.notification;
+
+import org.ikozmin.common.event.ZenithProcessingSummary;
+
+import java.nio.file.Path;
 import java.util.List;
-```
 
-Заменить существующий метод `buildStandalone(String catalog, ZenithProcessingSummary summary)` полностью:
-
-```java
 /**
- * Собирает отдельное уведомление для одного результата автономного запуска Zenith.
+ * Формирует понятные сотруднику уведомления о загрузке реестров и проверках Zenith.
  */
-public NotificationMessage buildStandalone(String catalog, ZenithProcessingSummary summary) {
-    return buildStandalone(List.of(new ZenithNotificationItem(catalog, summary)));
-}
-```
+public final class ZenithNotificationTextBuilder {
+    /**
+     * Формирует одно итоговое уведомление о загрузке реестров в Zenith.
+     */
+    public NotificationMessage buildImport(List<ZenithNotificationItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Zenith notification items are empty");
+        }
 
-После него добавить новый метод полностью:
+        String lineSeparator = System.lineSeparator();
+        String subject = items.size() == 1
+                ? "Реестр загружен в Zenith: " + displayCatalogName(items.getFirst().catalog())
+                : "Реестры загружены в Zenith: " + items.size();
 
-```java
-/**
- * Собирает одно итоговое уведомление по всем перечням, обработанным в запуске Zenith.
- */
-public NotificationMessage buildStandalone(List<ZenithNotificationItem> items) {
-    if (items == null || items.isEmpty()) {
-        throw new IllegalArgumentException("Zenith notification items are empty");
-    }
+        StringBuilder body = new StringBuilder();
+        body.append("Здравствуйте.").append(lineSeparator);
+        body.append(lineSeparator);
+        body.append("В Zenith завершена загрузка обновленных перечней Росфинмониторинга.")
+                .append(lineSeparator);
+        body.append("Обработано перечней: ")
+                .append(items.size())
+                .append(lineSeparator);
+        body.append(lineSeparator);
 
-    String lineSeparator = System.lineSeparator();
-    String subject = items.size() == 1
-            ? "Результат проверки Zenith: " + displayCatalogName(items.getFirst().catalog())
-            : "Результаты проверки Zenith: " + items.size() + " перечня(ей)";
+        for (int index = 0; index < items.size(); index++) {
+            ZenithNotificationItem item = items.get(index);
 
-    StringBuilder body = new StringBuilder();
-    body.append("Здравствуйте.").append(lineSeparator);
-    body.append(lineSeparator);
-    body.append("Завершена проверка в Zenith.").append(lineSeparator);
-    body.append("Обработано перечней: ").append(items.size()).append(lineSeparator);
-    body.append(lineSeparator);
+            body.append(index + 1)
+                    .append(". ")
+                    .append(displayCatalogName(item.catalog()))
+                    .append(lineSeparator);
 
-    for (int index = 0; index < items.size(); index++) {
-        ZenithNotificationItem item = items.get(index);
+            appendImportResultBlock(body, "    ", item.summary());
+            body.append(lineSeparator);
+        }
 
-        body.append(index + 1)
-                .append(". Перечень: ")
-                .append(displayCatalogName(item.catalog()))
+        body.append("Это автоматическое уведомление. Не надо на него отвечать.")
                 .append(lineSeparator);
 
-        appendReportFile(body, item.summary(), lineSeparator);
-        appendResultBlock(body, "    ", item.summary());
-        body.append(lineSeparator);
+        return new NotificationMessage(subject, body.toString());
     }
 
-    body.append("Это автоматическое уведомление. Не надо на него отвечать.")
-            .append(lineSeparator);
+    /**
+     * Формирует одно итоговое уведомление о результатах массовой проверки Zenith.
+     */
+    public NotificationMessage buildCheck(List<ZenithNotificationItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Zenith notification items are empty");
+        }
 
-    return new NotificationMessage(subject, body.toString());
+        String lineSeparator = System.lineSeparator();
+        String subject = items.size() == 1
+                ? "Результат проверки Zenith: " + displayCatalogName(items.getFirst().catalog())
+                : "Результаты проверки Zenith: " + items.size() + " перечня(ей)";
+
+        StringBuilder body = new StringBuilder();
+        body.append("Здравствуйте.").append(lineSeparator);
+        body.append(lineSeparator);
+        body.append("Завершена массовая проверка в Zenith.").append(lineSeparator);
+        body.append("Обработано перечней: ").append(items.size()).append(lineSeparator);
+        body.append(lineSeparator);
+
+        for (int index = 0; index < items.size(); index++) {
+            ZenithNotificationItem item = items.get(index);
+
+            body.append(index + 1)
+                    .append(". Перечень: ")
+                    .append(displayCatalogName(item.catalog()))
+                    .append(lineSeparator);
+
+            appendReportFile(body, item.summary(), lineSeparator);
+            appendCheckResultBlock(body, "    ", item.summary());
+            body.append(lineSeparator);
+        }
+
+        body.append("Это автоматическое уведомление. Не надо на него отвечать.")
+                .append(lineSeparator);
+
+        return new NotificationMessage(subject, body.toString());
+    }
+
+    /**
+     * Добавляет результат Zenith в общее уведомление rfm-downloader.
+     */
+    public void appendEmbeddedBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+        body.append(System.lineSeparator());
+        body.append(indent).append("Проверка в Zenith").append(System.lineSeparator());
+        appendCheckResultBlock(body, indent + indent, summary);
+    }
+
+    /**
+     * Добавляет понятный сотруднику итог импорта одного реестра.
+     */
+    private void appendImportResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+        String lineSeparator = System.lineSeparator();
+
+        if (summary == null) {
+            body.append(indent)
+                    .append("Результат загрузки в Zenith недоступен. Проверьте журнал Zenith.")
+                    .append(lineSeparator);
+            return;
+        }
+
+        if (!summary.processed()) {
+            body.append(indent)
+                    .append("Не удалось загрузить реестр в Zenith.")
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("Подробности доступны в журнале Zenith.")
+                    .append(lineSeparator);
+            return;
+        }
+
+        body.append(indent)
+                .append(value(summary.message()))
+                .append(lineSeparator);
+    }
+
+    /**
+     * Добавляет в текст результат проверки: ошибку, пустой отчет либо найденных лиц.
+     */
+    private void appendCheckResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+        String lineSeparator = System.lineSeparator();
+
+        if (summary == null) {
+            body.append(indent)
+                    .append("Результат Zenith недоступен. Проверьте журнал zenith-processor и каталог events.")
+                    .append(lineSeparator);
+            return;
+        }
+
+        if (!summary.processed()) {
+            body.append(indent)
+                    .append("Проверка в Zenith завершилась ошибкой.")
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("Подробности доступны в журнале Zenith.")
+                    .append(lineSeparator);
+            return;
+        }
+
+        if (summary.reportFile() == null && summary.totalPersons() == 0 && summary.newPersons() == 0
+                && summary.message() != null && !summary.message().isBlank()) {
+            body.append(indent)
+                    .append(summary.message())
+                    .append(lineSeparator);
+            return;
+        }
+
+        if (summary.newPersons() <= 0) {
+            body.append(indent)
+                    .append("Новых лиц не найдено.")
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("Всего совпадений в отчете: ")
+                    .append(summary.totalPersons())
+                    .append(lineSeparator);
+            return;
+        }
+
+        body.append(indent)
+                .append("Найдены новые лица: ")
+                .append(summary.newPersons())
+                .append(lineSeparator);
+        body.append(lineSeparator);
+
+        for (int i = 0; i < summary.persons().size(); i++) {
+            ZenithProcessingSummary.Person person = summary.persons().get(i);
+
+            body.append(indent)
+                    .append(i + 1)
+                    .append(". ")
+                    .append(value(person.displayName()))
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("    Номер счета: ")
+                    .append(value(person.accountNumber()))
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("    Организация: ")
+                    .append(value(person.emitentName()))
+                    .append(lineSeparator);
+
+            if (person.packageDirectory() != null) {
+                body.append(indent)
+                        .append("    Черновики ФЭС: ")
+                        .append(normalize(person.packageDirectory()))
+                        .append(lineSeparator);
+            }
+
+            body.append(lineSeparator);
+        }
+
+        body.append(indent)
+                .append("Автоматическая отправка в Росфинмониторинг не выполнялась.")
+                .append(lineSeparator);
+        body.append(indent)
+                .append("Необходимо проверить подготовленные черновики и принять решение вручную.")
+                .append(lineSeparator);
+    }
+
+    /**
+     * Добавляет путь к XLSX-отчету, если Zenith его сформировал.
+     */
+    private void appendReportFile(StringBuilder body, ZenithProcessingSummary summary, String lineSeparator) {
+        if (summary != null && summary.reportFile() != null) {
+            body.append("Отчет: ").append(normalize(summary.reportFile())).append(lineSeparator);
+        }
+    }
+
+    /**
+     * Преобразует внутренний код каталога в название для сотрудника.
+     */
+    private String displayCatalogName(String catalog) {
+        if (catalog == null) {
+            return "Неизвестный перечень";
+        }
+
+        return switch (catalog.toLowerCase()) {
+            case "te2", "te21" -> "Террористы и экстремисты";
+            case "mvk" -> "Решения МВК";
+            case "un" -> "Перечень ООН";
+            case "un-rus" -> "Перечень ООН на русском языке";
+            default -> catalog;
+        };
+    }
+
+    /**
+     * Подставляет дефис вместо отсутствующего значения.
+     */
+    private String value(String value) {
+        return value == null || value.isBlank() ? "-" : value;
+    }
+
+    /**
+     * Нормализует разделители пути для отображения в уведомлении.
+     */
+    private String normalize(Path path) {
+        return path.toString().replace('\\', '/');
+    }
 }
 ```
 
-Остальные методы класса не менять.
+## 3. Изменить результат успешного импорта
 
-## 3. Накопить результаты в ZenithProcessorMain
+Файл:
+
+```text
+zenith-processor/src/main/java/org/ikozmin/zenith/service/ZenithWorkflowService.java
+```
+
+В методе `processImportOnly(...)` найти текущий `return new ZenithProcessingSummary(...)` после публикации `ZenithImportCompletedEvent` и заменить этот фрагмент полностью:
+
+```java
+return new ZenithProcessingSummary(
+        event.eventId(),
+        true,
+        null,
+        0,
+        0,
+        null,
+        List.of(),
+        "Реестр успешно загружен в Zenith."
+);
+```
+
+Зачем: название перечня уже выводит `ZenithNotificationTextBuilder`, поэтому повторять технический код каталога в сообщении не требуется.
+
+## 4. Изменить накопление результатов в ZenithProcessorMain
 
 Файл:
 
@@ -136,134 +347,9 @@ public NotificationMessage buildStandalone(List<ZenithNotificationItem> items) {
 zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java
 ```
 
-### 3.1. Импорты
+### 4.1. Учитывать IMPORT_ONLY в итоговом уведомлении
 
-Добавить импорты:
-
-```java
-import org.ikozmin.common.notification.ZenithNotificationItem;
-
-import java.util.ArrayList;
-import java.util.List;
-```
-
-### 3.2. Заменить processDrain полностью
-
-```java
-/**
- * Обрабатывает всю доступную очередь и отправляет одно уведомление по ее итогам.
- */
-private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
-    int processed = 0;
-    int failed = 0;
-    List<ZenithNotificationItem> notificationItems = new ArrayList<>();
-
-    try {
-        while (true) {
-            int exitCode = processOnce(config, workflowMode, false, notificationItems);
-
-            if (exitCode == EXIT_NO_EVENTS) {
-                log.info("Zenith drain completed. processedEvents={}, failedEvents={}", processed, failed);
-                return EXIT_OK;
-            }
-
-            if (exitCode == EXIT_EVENT_FAILED) {
-                failed++;
-                continue;
-            }
-
-            if (exitCode != EXIT_OK) {
-                return exitCode;
-            }
-
-            processed++;
-        }
-    } finally {
-        sendNotificationIfNeeded(config, notificationItems);
-    }
-}
-```
-
-### 3.3. Заменить processOnce с двумя аргументами полностью
-
-```java
-/**
- * Обрабатывает одно событие и отправляет уведомление только по результату этой итерации.
- */
-private Integer processOnce(ZenithConfig config, ZenithWorkflowMode workflowMode) {
-    List<ZenithNotificationItem> notificationItems = new ArrayList<>();
-    int exitCode = processOnce(config, workflowMode, requireEvent, notificationItems);
-    sendNotificationIfNeeded(config, notificationItems);
-    return exitCode;
-}
-```
-
-### 3.4. Заменить перегруженный processOnce полностью
-
-```java
-/**
- * Маршрутизирует одну итерацию в нужную очередь и передает накопитель результатов.
- */
-private Integer processOnce(
-        ZenithConfig config,
-        ZenithWorkflowMode workflowMode,
-        boolean requireEventForIteration,
-        List<ZenithNotificationItem> notificationItems
-) {
-    return switch (workflowMode) {
-        case FULL -> processRegistryUpdatedEvent(
-                config,
-                ZenithWorkflowMode.FULL,
-                requireEventForIteration,
-                notificationItems
-        );
-        case IMPORT_ONLY -> processRegistryUpdatedEvent(
-                config,
-                ZenithWorkflowMode.IMPORT_ONLY,
-                requireEventForIteration,
-                notificationItems
-        );
-        case CHECK_ONLY -> processImportCompletedEvent(
-                config,
-                requireEventForIteration,
-                notificationItems
-        );
-    };
-}
-```
-
-### 3.5. Изменить сигнатуру processRegistryUpdatedEvent
-
-Найти сигнатуру:
-
-```java
-private Integer processRegistryUpdatedEvent(
-        ZenithConfig config,
-        ZenithWorkflowMode workflowMode,
-        boolean requireEventForIteration
-) {
-```
-
-Заменить только сигнатуру на:
-
-```java
-private Integer processRegistryUpdatedEvent(
-        ZenithConfig config,
-        ZenithWorkflowMode workflowMode,
-        boolean requireEventForIteration,
-        List<ZenithNotificationItem> notificationItems
-) {
-```
-
-В `try` этого метода заменить блок:
-
-```java
-if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
-    sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
-}
-```
-
-на:
+В методе `processRegistryUpdatedEvent(...)` найти:
 
 ```java
 if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
@@ -274,54 +360,7 @@ if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
 }
 ```
 
-В `catch` заменить строку:
-
-```java
-saveFailureSummary(config, claimedEvent.get().event().eventId(), e);
-```
-
-на полный блок:
-
-```java
-ZenithProcessingSummary failureSummary = ZenithProcessingSummary.failed(
-        claimedEvent.get().event().eventId(),
-        "Ошибка обработки события Zenith: " + e.getMessage()
-);
-saveSummary(config, failureSummary);
-
-if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
-    notificationItems.add(new ZenithNotificationItem(
-            claimedEvent.get().event().catalog(),
-            failureSummary
-    ));
-}
-```
-
-### 3.6. Изменить сигнатуру processImportCompletedEvent
-
-Найти:
-
-```java
-private Integer processImportCompletedEvent(ZenithConfig config, boolean requireEventForIteration) {
-```
-
-Заменить на:
-
-```java
-private Integer processImportCompletedEvent(
-        ZenithConfig config,
-        boolean requireEventForIteration,
-        List<ZenithNotificationItem> notificationItems
-) {
-```
-
-В `try` заменить:
-
-```java
-sendNotificationIfNeeded(config, claimedEvent.get().event().catalog(), summary);
-```
-
-на:
+Заменить полностью:
 
 ```java
 notificationItems.add(new ZenithNotificationItem(
@@ -330,34 +369,63 @@ notificationItems.add(new ZenithNotificationItem(
 ));
 ```
 
-В `catch` заменить:
+В блоке `catch` того же метода найти:
 
 ```java
-saveFailureSummary(config, claimedEvent.get().event().sourceEventId(), e);
+if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+    notificationItems.add(new ZenithNotificationItem(
+            claimedEvent.get().event().catalog(),
+            failureSummary
+    ));
+}
 ```
 
-на:
+Заменить полностью:
 
 ```java
-ZenithProcessingSummary failureSummary = ZenithProcessingSummary.failed(
-        claimedEvent.get().event().sourceEventId(),
-        "Ошибка обработки события Zenith: " + e.getMessage()
-);
-saveSummary(config, failureSummary);
 notificationItems.add(new ZenithNotificationItem(
         claimedEvent.get().event().catalog(),
         failureSummary
 ));
 ```
 
-### 3.7. Заменить sendNotificationIfNeeded полностью
+Зачем: именно эти два условия сейчас исключают результаты `IMPORT_ONLY` из пакетного уведомления.
+
+### 4.2. Передать режим в отправку уведомления
+
+В `processDrain(...)` в блоке `finally` заменить:
+
+```java
+sendNotificationIfNeeded(config, notificationItems);
+```
+
+на:
+
+```java
+sendNotificationIfNeeded(config, workflowMode, notificationItems);
+```
+
+В `processOnce(ZenithConfig config, ZenithWorkflowMode workflowMode)` заменить:
+
+```java
+sendNotificationIfNeeded(config, notificationItems);
+```
+
+на:
+
+```java
+sendNotificationIfNeeded(config, workflowMode, notificationItems);
+```
+
+### 4.3. Заменить sendNotificationIfNeeded полностью
 
 ```java
 /**
- * Отправляет одно уведомление по накопленным результатам запуска, если доставка не подавлена.
+ * Отправляет одно итоговое уведомление в соответствии с режимом выполненного workflow.
  */
 private void sendNotificationIfNeeded(
         ZenithConfig config,
+        ZenithWorkflowMode workflowMode,
         List<ZenithNotificationItem> notificationItems
 ) {
     if (notificationItems == null || notificationItems.isEmpty()) {
@@ -375,42 +443,114 @@ private void sendNotificationIfNeeded(
         return;
     }
 
-    NotificationMessage message = new ZenithNotificationTextBuilder()
-            .buildStandalone(notificationItems);
+    ZenithNotificationTextBuilder textBuilder = new ZenithNotificationTextBuilder();
+
+    NotificationMessage message = workflowMode == ZenithWorkflowMode.IMPORT_ONLY
+            ? textBuilder.buildImport(notificationItems)
+            : textBuilder.buildCheck(notificationItems);
+
     dispatcher.send(message);
 }
 ```
 
-Метод `saveFailureSummary(...)` после этой доработки больше не используется. Удалить его целиком, чтобы не оставлять дублирующую логику создания failure summary.
+`FULL` и `CHECK_ONLY` используют `buildCheck(...)`, а `IMPORT_ONLY` - `buildImport(...)`.
 
-## 4. Комментарии в коде
+## 5. Конфигурация серверов
 
-Классные комментарии добавлены во все production-файлы. Дополнительно нужно документировать каждый нетривиальный метод: файловые операции, HTTP, очереди, бизнес-правила, формирование уведомлений, обработку ошибок и преобразование путей.
+### Сервер 1: только скачивание
 
-Не документируются отдельными Javadoc тривиальные DTO-getter-ы (`getUserName()`, `getPort()`) и record-accessor-ы: их имена и типы исчерпывающе описывают действие. Комментарий вида «возвращает имя пользователя» не добавляет знания и ухудшает код.
+В рабочем `rfm-downloader/config/config.json` настроить:
 
-## 5. Проверка
+```json
+"Notifications": {
+  "Enabled": false
+},
+"Events": {
+  "Directory": "\\\\server-2\\rfm-events\\registry-updated"
+},
+"ZenithTrigger": {
+  "Enabled": false
+}
+```
 
-Из корня Maven-проекта:
+Сервер 1 скачивает реестры и публикует события, но не запускает Zenith и не отправляет уведомления.
+
+### Сервер 2: только импорт в Zenith
+
+В рабочем `zenith-processor/config/zenith-config.json` настроить:
+
+```json
+"Events": {
+  "RegistryUpdatedDirectory": "\\\\server-2\\rfm-events\\registry-updated",
+  "ImportCompletedDirectories": [
+    "\\\\server-3\\rfm-events\\zenith-check"
+  ],
+  "CheckDirectory": "\\\\server-3\\rfm-events\\zenith-check"
+},
+"Workflow": {
+  "Mode": "IMPORT_ONLY"
+},
+"Notifications": {
+  "Enabled": true
+}
+```
+
+Запуск:
+
+```bat
+java -jar zenith-processor.jar --drain --mode IMPORT_ONLY
+```
+
+### Сервер 3: только проверка
+
+В рабочем `zenith-processor/config/zenith-config.json` настроить:
+
+```json
+"Events": {
+  "RegistryUpdatedDirectory": "\\\\server-2\\rfm-events\\registry-updated",
+  "ImportCompletedDirectories": [
+    "\\\\server-3\\rfm-events\\zenith-check"
+  ],
+  "CheckDirectory": "\\\\server-3\\rfm-events\\zenith-check"
+},
+"Workflow": {
+  "Mode": "CHECK_ONLY"
+},
+"Notifications": {
+  "Enabled": true
+}
+```
+
+Запуск:
+
+```bat
+java -jar zenith-processor.jar --drain --mode CHECK_ONLY
+```
+
+Сервер 3 не импортирует реестр повторно. Он выполняет проверку, выгружает XLSX-отчет, анализирует совпадения, подготавливает черновики ФЭС и отправляет одно итоговое уведомление.
+
+## 6. Проверка
+
+После правок из корня Maven-проекта выполнить:
 
 ```bat
 mvn clean package
 ```
 
-Положить в `Events.CheckDirectory/new` минимум три корректных события для `te21`, `un`, `mvk` и выполнить:
+Положить события для `te21`, `un` и `mvk` в очередь сервера 2.
 
-```bat
-run-zenith-drain.bat --mode CHECK_ONLY
-```
-
-Ожидаемый результат:
+Ожидаемый результат этапа 2:
 
 ```text
-все три события -> processed
-создано три XLSX-отчета или три корректных пустых summary
-отправлено одно email/Telegram-уведомление
-в уведомлении есть три пронумерованных блока перечней
-в логе: Zenith drain completed. processedEvents=3, failedEvents=0
+три события -> processed
+три события ZenithImportCompleted -> очередь сервера 3
+одно уведомление «Реестры загружены в Zenith: 3»
 ```
 
-Затем положить одно некорректное событие между двумя корректными. Ожидаемо: одно попадет в `failed`, корректные будут обработаны, а единое уведомление будет содержать как успешные результаты, так и блок с причиной ошибки.
+После запуска этапа 3 ожидаемо:
+
+```text
+три события -> processed
+созданы отчеты и черновики ФЭС при наличии новых лиц
+одно уведомление «Результаты проверки Zenith: 3 перечня(ей)»
+```

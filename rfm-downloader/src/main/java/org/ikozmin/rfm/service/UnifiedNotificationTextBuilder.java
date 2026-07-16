@@ -57,7 +57,7 @@ public final class UnifiedNotificationTextBuilder {
                     .append(System.lineSeparator());
 
             if (result.file() != null) {
-                body.append(indent).append("Файл для обработки: ")
+                body.append(indent).append("Файл реестра: ")
                         .append(result.file().toAbsolutePath())
                         .append(System.lineSeparator());
 
