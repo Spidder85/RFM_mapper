@@ -149,7 +149,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                 processed++;
             }
         } finally {
-            sendNotificationIfNeeded(config, notificationItems);
+            sendNotificationIfNeeded(config, workflowMode, notificationItems);
         }
     }
 
@@ -159,7 +159,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     private Integer processOnce(ZenithConfig config, ZenithWorkflowMode workflowMode) {
         List<ZenithNotificationItem> notificationItems = new ArrayList<>();
         int exitCode = processOnce(config, workflowMode, requireEvent, notificationItems);
-        sendNotificationIfNeeded(config, notificationItems);
+        sendNotificationIfNeeded(config, workflowMode, notificationItems);
         return exitCode;
     }
 
@@ -230,12 +230,12 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
             saveSummary(config, summary);
 
-            if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+            //if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
                 notificationItems.add(new ZenithNotificationItem(
                         claimedEvent.get().event().catalog(),
                         summary
                 ));
-            }
+            //}
 
             consumer.markProcessed(claimedEvent.get());
 
@@ -253,12 +253,12 @@ public final class ZenithProcessorMain implements Callable<Integer> {
             );
             saveSummary(config, failureSummary);
 
-            if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
+            //if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
                 notificationItems.add(new ZenithNotificationItem(
                         claimedEvent.get().event().catalog(),
                         failureSummary
                 ));
-            }
+            //}
             consumer.markFailed(claimedEvent.get());
 
             return EXIT_EVENT_FAILED;
@@ -348,10 +348,11 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     }
 
     /**
-     * Отправляет одно уведомление по накопленным результатам запуска, если доставка не подавлена.
+     * Отправляет одно итоговое уведомление в соответствии с режимом выполненного workflow.
      */
     private void sendNotificationIfNeeded(
             ZenithConfig config,
+            ZenithWorkflowMode workflowMode,
             List<ZenithNotificationItem> notificationItems
     ) {
         if (notificationItems == null || notificationItems.isEmpty()) {
@@ -369,8 +370,12 @@ public final class ZenithProcessorMain implements Callable<Integer> {
             return;
         }
 
-        NotificationMessage message = new ZenithNotificationTextBuilder()
-                .buildStandalone(notificationItems);
+        ZenithNotificationTextBuilder textBuilder  = new ZenithNotificationTextBuilder();
+
+        NotificationMessage message = workflowMode == ZenithWorkflowMode.IMPORT_ONLY
+                ? textBuilder.buildImport(notificationItems)
+                : textBuilder.buildCheck(notificationItems);
+
         dispatcher.send(message);
     }
 

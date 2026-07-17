@@ -92,7 +92,7 @@ public final class ZenithWorkflowService {
                 0,
                 null,
                 List.of(),
-                "Реестр импортирован в Zenith. Каталог: " + event.catalog()
+                "Реестр успешно загружен в Zenith."
         );
     }
 

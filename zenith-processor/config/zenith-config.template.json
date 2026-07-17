@@ -41,7 +41,7 @@
         "Filter": true,
         "FilterTemplatePath": "config/zenith/podft-report-filter-te21.xml",
         "OutputDirectory": "downloads/zenith-reports/te21",
-        "FileNamePrefix": "T38_terr"
+        "FileNamePrefix": "T38"
       },
       "un": {
         "Enabled": true,
@@ -49,7 +49,7 @@
         "Filter": true,
         "FilterTemplatePath": "config/zenith/podft-report-filter-un.xml",
         "OutputDirectory": "downloads/zenith-reports/un",
-        "FileNamePrefix": "T38_un"
+        "FileNamePrefix": "T38"
       },
       "mvk": {
         "Enabled": true,
@@ -57,7 +57,7 @@
         "Filter": true,
         "FilterTemplatePath": "config/zenith/podft-report-filter-mvk.xml",
         "OutputDirectory": "downloads/zenith-reports/mvk",
-        "FileNamePrefix": "T38_mvk"
+        "FileNamePrefix": "T38"
       }
     },
 

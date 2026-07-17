@@ -75,7 +75,7 @@ public final class ZenithReportService {
                     + "-"
                     + endDate.format(formatter)
                     + "_"
-                    + catalog
+                    + displayCatalogName(catalog)
                     + ".xlsx";
 
             Path targetFile = outputDir.resolve(fileName);
@@ -101,6 +101,21 @@ public final class ZenithReportService {
                     + ", outputDirectory="
                     + config.getOutputDirectory(), e);
         }
+    }
+
+    /** Преобразует внутренний код каталога в название для сотрудника. */
+    private String displayCatalogName(String catalog) {
+        if (catalog == null) {
+            return "Неизвестный перечень";
+        }
+
+        return switch (catalog.toLowerCase()) {
+            case "te2", "te21" -> "терр";
+            case "mvk" -> "решМВК";
+            case "un" -> "ООН";
+            case "un-rus" -> "ООНрус";
+            default -> catalog;
+        };
     }
 
     /** Загружает XML-фильтр отчета из каталога приложения. */
