@@ -4,15 +4,19 @@ import org.ikozmin.common.event.FileEventConsumer;
 import org.ikozmin.common.event.ProcessingSummaryStore;
 import org.ikozmin.common.event.ZenithImportCompletedEventConsumer;
 import org.ikozmin.common.event.ZenithProcessingSummary;
-import org.ikozmin.common.notification.NotificationDispatcher;
-import org.ikozmin.common.notification.NotificationMessage;
-import org.ikozmin.common.notification.ZenithNotificationItem;
+import org.ikozmin.common.notification.*;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.config.ZenithWorkflowMode;
-import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
 import org.ikozmin.zenith.service.ZenithWorkflowService;
 import org.ikozmin.common.event.EventRetentionService;
+import org.ikozmin.common.event.EventQueueCompactor;
+import org.ikozmin.zenith.client.ZenithApiException;
+
+import java.net.ConnectException;
+import java.net.http.HttpTimeoutException;
+import java.net.UnknownHostException;
+import java.net.SocketTimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
@@ -59,9 +63,6 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     @Option(names = "--require-event", description = "Fail if no event is available")
     private boolean requireEvent;
 
-    @Option(names = "--retry-failed", description = "Move one failed event back to new queue before processing")
-    private boolean retryFailed;
-
     @Option(names = "--suppress-notification", description = "Do not send Zenith notification for this run")
     private boolean suppressNotification;
 
@@ -77,6 +78,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
         try {
             ZenithConfig config = new ZenithConfigLoader().load(configPath);
             ZenithWorkflowMode workflowMode = resolveMode(config);
+            prepareQueue(config, workflowMode);
 
             if (watch) {
                 runWatch(config, workflowMode);
@@ -108,6 +110,7 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                 delay);
 
         while (!Thread.currentThread().isInterrupted()) {
+            prepareQueue(config, workflowMode);
             int exitCode = processOnce(config, workflowMode);
 
             if (exitCode != EXIT_OK && exitCode != EXIT_NO_EVENTS) {
@@ -204,18 +207,6 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                 Path.of(config.getEvents().getRegistryUpdatedDirectory())
         );
 
-        if (retryFailed) {
-            Optional<Path> requeued = consumer.requeueOldestFailed();
-
-            if (requeued.isEmpty()) {
-                log.info("No failed registry update events found");
-                return EXIT_OK;
-            }
-
-            log.info("Failed event requeued: {}", requeued.get().toAbsolutePath());
-        }
-
-
         ZenithWorkflowService workflowService = new ZenithWorkflowService(config);
         Optional<FileEventConsumer.ClaimedEvent> claimedEvent = consumer.claimNext();
 
@@ -230,37 +221,38 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
             saveSummary(config, summary);
 
-            //if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
-                notificationItems.add(new ZenithNotificationItem(
-                        claimedEvent.get().event().catalog(),
-                        summary
-                ));
-            //}
+            notificationItems.add(new ZenithNotificationItem(
+                    claimedEvent.get().event().catalog(),
+                    summary
+            ));
 
             consumer.markProcessed(claimedEvent.get());
 
             return EXIT_OK;
         } catch (Exception e) {
-            log.error("Zenith registry event failed. eventId={}, catalog={}, error={}",
+            boolean retryable = isRetryableZenithFailure(e);
+
+            log.error("Zenith registry event failed. eventId={}, catalog={}, retryable={}, error={}",
                     claimedEvent.get().event().eventId(),
                     claimedEvent.get().event().catalog(),
+                    retryable,
                     e.getMessage(),
                     e);
 
-            ZenithProcessingSummary failureSummary = ZenithProcessingSummary.failed(
+            ZenithProcessingSummary failureSummary = createFailureSummary(
                     claimedEvent.get().event().eventId(),
-                    "Ошибка обработки события Zenith: " + e.getMessage()
+                    retryable
             );
             saveSummary(config, failureSummary);
+            notificationItems.add(new ZenithNotificationItem(
+                    claimedEvent.get().event().catalog(),
+                    failureSummary
+            ));
 
-            //if (workflowMode != ZenithWorkflowMode.IMPORT_ONLY) {
-                notificationItems.add(new ZenithNotificationItem(
-                        claimedEvent.get().event().catalog(),
-                        failureSummary
-                ));
-            //}
+            if (retryable && consumer.markRetryable(claimedEvent.get(), e.getMessage())) {
+                return EXIT_EVENT_FAILED;
+            }
             consumer.markFailed(claimedEvent.get());
-
             return EXIT_EVENT_FAILED;
         }
     }
@@ -293,24 +285,31 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
             return EXIT_OK;
         } catch (Exception e) {
-            log.error("Zenith check event failed. eventId={}, sourceEventId={}, catalog={}, error={}",
+            boolean retryable = isRetryableZenithFailure(e);
+
+            log.error("Zenith check event failed. eventId={}, sourceEventId={}, catalog={}, retryable={}, error={}",
                     claimedEvent.get().event().eventId(),
                     claimedEvent.get().event().sourceEventId(),
                     claimedEvent.get().event().catalog(),
+                    retryable,
                     e.getMessage(),
                     e);
 
-            ZenithProcessingSummary failureSummary = ZenithProcessingSummary.failed(
+            ZenithProcessingSummary failureSummary = createFailureSummary(
                     claimedEvent.get().event().sourceEventId(),
-                    "Ошибка обработки события Zenith: " + e.getMessage()
+                    retryable
             );
             saveSummary(config, failureSummary);
             notificationItems.add(new ZenithNotificationItem(
                     claimedEvent.get().event().catalog(),
                     failureSummary
             ));
-            consumer.markFailed(claimedEvent.get());
 
+            if (retryable && consumer.markRetryable(claimedEvent.get(), e.getMessage())) {
+                return EXIT_EVENT_FAILED;
+            }
+
+            consumer.markFailed(claimedEvent.get());
             return EXIT_EVENT_FAILED;
         }
     }
@@ -348,6 +347,72 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     }
 
     /**
+     * Возвращает доступные retry-события в очередь и удаляет устаревшие обновления одного перечня.
+     */
+    private void prepareQueue(ZenithConfig config, ZenithWorkflowMode workflowMode) {
+        EventQueueCompactor compactor = new EventQueueCompactor();
+
+        switch (workflowMode) {
+            case FULL, IMPORT_ONLY -> {
+                Path eventRootDir = Path.of(config.getEvents().getRegistryUpdatedDirectory());
+                FileEventConsumer consumer = new FileEventConsumer(eventRootDir);
+                int requeued = consumer.requeueDueRetries();
+                int deleted = compactor.keepLatestByCatalog(eventRootDir);
+
+                log.info("RegistryUpdated queue prepared. requeuedRetries={}, deletedObsolete={}",
+                        requeued,
+                        deleted);
+            }
+            case CHECK_ONLY -> {
+                Path eventRootDir = Path.of(config.getEvents().getCheckDirectory());
+                ZenithImportCompletedEventConsumer consumer = new ZenithImportCompletedEventConsumer(eventRootDir);
+                int requeued = consumer.requeueDueRetries();
+                int deleted = compactor.keepLatestByCatalog(eventRootDir);
+
+                log.info("ZenithImportCompleted queue prepared. requeuedRetries={}, deletedObsolete={}",
+                        requeued,
+                        deleted);
+            }
+        }
+    }
+
+    /**
+     * Определяет, можно ли безопасно повторить событие после ошибки Zenith.
+     */
+    private boolean isRetryableZenithFailure(Exception exception) {
+        Throwable current = exception;
+
+        while (current != null) {
+            if (current instanceof ZenithApiException apiException) {
+                int status = apiException.status();
+                return status == 408 || status == 429 || status >= 500;
+            }
+
+            if (current instanceof ConnectException
+                    || current instanceof HttpTimeoutException
+                    || current instanceof SocketTimeoutException
+                    || current instanceof UnknownHostException) {
+                return true;
+            }
+
+            current = current.getCause();
+        }
+
+        return false;
+    }
+
+    /**
+     * Создает безопасный для сотрудника summary ошибки без передачи технического текста API в уведомление.
+     */
+    private ZenithProcessingSummary createFailureSummary(String eventId, boolean retryable) {
+        String message = retryable
+                ? "Zenith временно недоступен. Повторная попытка будет выполнена автоматически."
+                : "Событие не обработано. Подробности доступны в журнале Zenith.";
+
+        return ZenithProcessingSummary.failed(eventId, message);
+    }
+
+    /**
      * Отправляет одно итоговое уведомление в соответствии с режимом выполненного workflow.
      */
     private void sendNotificationIfNeeded(
@@ -376,7 +441,10 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                 ? textBuilder.buildImport(notificationItems)
                 : textBuilder.buildCheck(notificationItems);
 
-        dispatcher.send(message);
+        NotificationPurpose purpose = workflowMode == ZenithWorkflowMode.IMPORT_ONLY
+                ? NotificationPurpose.IMPORT
+                : NotificationPurpose.CHECK;
+        dispatcher.send(message, purpose);
     }
 
     /** Очищает завершенные события всех очередей, доступных данному экземпляру Zenith. */

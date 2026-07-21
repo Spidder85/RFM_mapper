@@ -17,6 +17,7 @@ public final class FileEventConsumer {
     private final Path processingDir;
     private final Path processedDir;
     private final Path failedDir;
+    private final EventRetryService retryService;
 
     /** Инициализирует пути состояний очереди относительно ее корневого каталога. */
     public FileEventConsumer(Path rootDir) {
@@ -24,6 +25,7 @@ public final class FileEventConsumer {
         this.processingDir = rootDir.resolve("processing");
         this.processedDir = rootDir.resolve("processed");
         this.failedDir = rootDir.resolve("failed");
+        this.retryService = new EventRetryService(rootDir);
     }
 
     /**
@@ -49,7 +51,6 @@ public final class FileEventConsumer {
 
                 Path source = next.get();
                 Path target = processingDir.resolve(source.getFileName());
-
                 Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
 
                 RegistryUpdatedEvent event = JsonMapper.get()
@@ -67,6 +68,7 @@ public final class FileEventConsumer {
      */
     public void markProcessed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), processedDir.resolve(claimedEvent.file().getFileName()));
+        retryService.clear(claimedEvent.file());
     }
 
     /**
@@ -74,6 +76,17 @@ public final class FileEventConsumer {
      */
     public void markFailed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), failedDir.resolve(claimedEvent.file().getFileName()));
+        retryService.clear(claimedEvent.file());
+    }
+
+    /* помечает событие необходимым для повторной обработки */
+    public boolean markRetryable(ClaimedEvent claimedEvent, String error) {
+        return retryService.scheduleRetry(claimedEvent.file(), error);
+    }
+
+    /* перемещает события с истекшим сроком повторной обработки в очередь new */
+    public int requeueDueRetries() {
+        return  retryService.requeueDueEvents();
     }
 
     /** Перемещает файл события в следующее состояние очереди. */
@@ -111,7 +124,6 @@ public final class FileEventConsumer {
 
                 Path source = next.get();
                 Path target = newDir.resolve(source.getFileName());
-
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
 
                 return Optional.of(target);

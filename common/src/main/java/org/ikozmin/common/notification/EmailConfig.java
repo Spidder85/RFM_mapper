@@ -34,6 +34,9 @@ public final class EmailConfig {
     @JsonProperty("To")
     private List<String> to;
 
+    @JsonProperty("ImportTo")
+    private List<String> importTo;
+
     @JsonProperty("Subject")
     private String subject;
 
@@ -69,6 +72,14 @@ public final class EmailConfig {
     }
 
     public List<String> getTo() {
+        return to;
+    }
+
+    public List<String> getRecipients(NotificationPurpose purpose) {
+        if (purpose == NotificationPurpose.IMPORT && importTo != null && !importTo.isEmpty()) {
+            return importTo;
+        }
+
         return to;
     }
 

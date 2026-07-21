@@ -79,6 +79,11 @@
       "To": [
         "operator@your-company.ru"
       ],
+      "ImportTo": [
+        "office1@your-company.ru",
+        "office2@your-company.ru",
+        "office3@your-company.ru"
+      ],
       "Subject": "Результат проверки Zenith",
       "IncludeAttachment": false
     },
