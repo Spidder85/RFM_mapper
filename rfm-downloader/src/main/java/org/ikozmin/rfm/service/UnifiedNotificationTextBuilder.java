@@ -3,6 +3,7 @@ package org.ikozmin.rfm.service;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.common.notification.NotificationMessage;
 import org.ikozmin.common.notification.ZenithNotificationTextBuilder;
+import org.ikozmin.rfm.config.AppConfig;
 import org.ikozmin.rfm.model.CatalogType;
 
 import java.nio.file.Files;
@@ -16,7 +17,8 @@ public final class UnifiedNotificationTextBuilder {
     private final ZenithNotificationTextBuilder zenithTextBuilder = new ZenithNotificationTextBuilder();
 
     public NotificationMessage build(
-            List<RegistryNotificationItem> items
+            List<RegistryNotificationItem> items,
+            AppConfig config
     ) throws Exception {
         if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("Notification items are empty");
@@ -75,36 +77,38 @@ public final class UnifiedNotificationTextBuilder {
             }
 
             // zenith appendZenithBlock(body, indent, item.zenithSummary());
-            zenithTextBuilder.appendEmbeddedBlock(body, indent, item.zenithSummary());
-            body.append(System.lineSeparator());
+            if (config.getZenithTrigger().isEnabled()) {
+                zenithTextBuilder.appendEmbeddedBlock(body, indent, item.zenithSummary());
+            }
+                body.append(System.lineSeparator());
         }
         body.append("Это автоматическое уведомление. Не надо на него отвечать.").append(System.lineSeparator());
 
         return new NotificationMessage(subject, body.toString());
     }
 
-    public NotificationMessage build(
-            String catalogType,
-            String idXml,
-            String oldIdXml,
-            Path filePath,
-            String checksum,
-            ZenithProcessingSummary zenithSummary
-    ) throws Exception {
-        UpdateResult result = new UpdateResult(
-                true,
-                CatalogType.from(catalogType),
-                oldIdXml,
-                idXml,
-                filePath,
-                filePath,
-                checksum,
-                safeFileSize(filePath),
-                LocalDateTime.now().toString()
-        );
-
-        return build(List.of(new RegistryNotificationItem(result, zenithSummary)));
-    }
+//    public NotificationMessage build(
+//            String catalogType,
+//            String idXml,
+//            String oldIdXml,
+//            Path filePath,
+//            String checksum,
+//            ZenithProcessingSummary zenithSummary
+//    ) throws Exception {
+//        UpdateResult result = new UpdateResult(
+//                true,
+//                CatalogType.from(catalogType),
+//                oldIdXml,
+//                idXml,
+//                filePath,
+//                filePath,
+//                checksum,
+//                safeFileSize(filePath),
+//                LocalDateTime.now().toString()
+//        );
+//
+//        return build(List.of(new RegistryNotificationItem(result, zenithSummary)));
+//    }
 
     private long safeFileSize(Path file) {
         if (file == null || !Files.exists(file)) {

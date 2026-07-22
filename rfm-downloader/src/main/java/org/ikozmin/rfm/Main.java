@@ -293,7 +293,7 @@ public final class Main implements Callable<Integer> {
 
         try {
             UnifiedNotificationTextBuilder builder = new UnifiedNotificationTextBuilder();
-            NotificationMessage message = builder.build(notificationItems);
+            NotificationMessage message = builder.build(notificationItems,config);
             notificationService.send(message);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to build or send notification", e);
@@ -304,12 +304,12 @@ public final class Main implements Callable<Integer> {
     private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, List<CatalogType> catalogTypes) {
         RetentionService retentionService = new RetentionService(config.getRetention());
 
-        if (!retentionService.isEnabled()) {
-            return;
-        }
-
-        for (CatalogType catalogType : catalogTypes) {
-            retentionService.apply(workDir, downloadDir, catalogType);
+        if (retentionService.isEnabled()) {
+            for (CatalogType catalogType : catalogTypes) {
+                retentionService.apply(workDir, downloadDir, catalogType);
+            }
+        } else {
+            log.info("Registry and audit retention is disabled");
         }
 
         Path eventRootDir = Path.of(config.getEvents() == null

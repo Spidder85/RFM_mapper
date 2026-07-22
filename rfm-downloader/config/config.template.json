@@ -25,7 +25,7 @@
   "Retention": {
     "Enabled": true,
     "KeepAuditDays": 60,
-    "KeepDownloadedVersions": 10
+    "KeepDownloadedVersions": 0
   },
   "Notifications": {
     "Enabled": false,
