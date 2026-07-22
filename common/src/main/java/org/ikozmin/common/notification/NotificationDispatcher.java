@@ -16,15 +16,12 @@ public final class NotificationDispatcher {
 
     public NotificationDispatcher(NotificationsConfig config) {
         this.config = config;
-
-        if (config == null) {
-            this.senders = null;
-        } else {
-            this.senders = List.of(
+        this.senders = config == null
+                ? List.of()
+                : List.of(
                     new EmailNotificationSender(config.getEmail()),
                     new TelegramNotificationSender(config.getTelegram())
-            );
-        }
+        );
     }
 
     public boolean isEnabled() {
@@ -35,6 +32,13 @@ public final class NotificationDispatcher {
      * Передает сообщение каждому включенному sender-у.
      */
     public void send(NotificationMessage message) {
+        send(message, NotificationPurpose.DEFAULT);
+    }
+
+    /**
+     * Передает сообщение всем включенным каналам с учетом назначения уведомления.
+     */
+    public void send(NotificationMessage message, NotificationPurpose purpose) {
         if (!isEnabled()) {
             return;
         }
@@ -43,11 +47,11 @@ public final class NotificationDispatcher {
 
         for (NotificationSender sender : senders) {
             if (sender.isEnabled()) {
-                sender.send(message);
+                sender.send(message, purpose);
                 enabledSenders++;
             }
         }
 
-        log.info("Notification dispatch completed. enabledSenders={}", enabledSenders);
+        log.info("Notification dispatch completed. purpose={}, enabledSenders={}", purpose, enabledSenders);
     }
 }

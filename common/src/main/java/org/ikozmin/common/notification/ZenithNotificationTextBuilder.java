@@ -3,30 +3,85 @@ package org.ikozmin.common.notification;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 
 import java.nio.file.Path;
+import java.util.List;
 
 /**
- * Формирует человекочитаемый текст результатов Zenith для standalone и RFM-уведомлений.
+ * Формирует понятные сотруднику уведомления о загрузке реестров и проверках Zenith.
  */
 public final class ZenithNotificationTextBuilder {
     /**
-     * Собирает отдельное уведомление, когда Zenith запускается автономно.
+     * Формирует одно итоговое уведомление о загрузке реестров в Zenith.
      */
-    public NotificationMessage buildStandalone(String catalog, ZenithProcessingSummary summary) {
-        String subject = "Результат проверки Zenith: " + displayCatalogName(catalog);
-        String lineSeparator = System.lineSeparator();
-        StringBuilder body = new StringBuilder();
+    public NotificationMessage buildImport(List<ZenithNotificationItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Zenith notification items are empty");
+        }
 
+        String lineSeparator = System.lineSeparator();
+        String subject = items.size() == 1
+                ? "Обновленный реестр Росфинмониторинга загружен в Zenith: " + displayCatalogName(items.getFirst().catalog())
+                : "Обновленные реестры Росфинмониторинга загружены в Zenith: " + items.size();
+
+        StringBuilder body = new StringBuilder();
         body.append("Здравствуйте.").append(lineSeparator);
         body.append(lineSeparator);
-        body.append("Завершена проверка в Zenith.").append(lineSeparator);
+        body.append("В Zenith завершена загрузка обновленных перечней Росфинмониторинга.")
+                .append(lineSeparator);
+        body.append("Обработано перечней: ")
+                .append(items.size())
+                .append(lineSeparator);
         body.append(lineSeparator);
-        body.append("Перечень: ").append(displayCatalogName(catalog)).append(lineSeparator);
 
-        appendReportFile(body, summary, lineSeparator);
+        for (int index = 0; index < items.size(); index++) {
+            ZenithNotificationItem item = items.get(index);
 
+            body.append(index + 1)
+                    .append(". ")
+                    .append(displayCatalogName(item.catalog()))
+                    .append(lineSeparator);
+
+            appendImportResultBlock(body, "    ", item.summary());
+            body.append(lineSeparator);
+        }
+
+        body.append("Это автоматическое уведомление. Не надо на него отвечать.")
+                .append(lineSeparator);
+
+        return new NotificationMessage(subject, body.toString());
+    }
+
+    /**
+     * Формирует одно итоговое уведомление о результатах массовой проверки Zenith.
+     */
+    public NotificationMessage buildCheck(List<ZenithNotificationItem> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Zenith notification items are empty");
+        }
+
+        String lineSeparator = System.lineSeparator();
+        String subject = items.size() == 1
+                ? "Результат проверки Zenith: " + displayCatalogName(items.getFirst().catalog())
+                : "Результаты проверки Zenith: " + items.size() + " перечня(ей)";
+
+        StringBuilder body = new StringBuilder();
+        body.append("Здравствуйте.").append(lineSeparator);
         body.append(lineSeparator);
-        appendResultBlock(body, "", summary);
+        body.append("Завершена массовая проверка в Zenith.").append(lineSeparator);
+        body.append("Обработано перечней: ").append(items.size()).append(lineSeparator);
         body.append(lineSeparator);
+
+        for (int index = 0; index < items.size(); index++) {
+            ZenithNotificationItem item = items.get(index);
+
+            body.append(index+1)
+                    .append(". Перечень: ")
+                    .append(displayCatalogName(item.catalog()))
+                    .append(lineSeparator);
+
+            //appendReportFile(body, item.summary(), lineSeparator);
+            appendCheckResultBlock(body, "    ", item.summary());
+            body.append(lineSeparator);
+        }
         body.append("Это автоматическое уведомление. Не надо на него отвечать.").append(lineSeparator);
 
         return new NotificationMessage(subject, body.toString());
@@ -38,10 +93,39 @@ public final class ZenithNotificationTextBuilder {
     public void appendEmbeddedBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
         body.append(System.lineSeparator());
         body.append(indent).append("Проверка в Zenith").append(System.lineSeparator());
-        appendResultBlock(body, indent + indent, summary);
+        appendCheckResultBlock(body, indent + indent, summary);
     }
 
-    private void appendResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+    /**
+     * Добавляет понятный сотруднику итог импорта одного реестра.
+     */
+    private void appendImportResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+        String lineSeparator = System.lineSeparator();
+
+        if (summary == null) {
+            body.append(indent)
+                    .append("Результат загрузки в Zenith недоступен. Проверьте журнал Zenith.")
+                    .append(lineSeparator);
+            return;
+        }
+
+        if (!summary.processed()) {
+            body.append(indent)
+                    .append("Не удалось загрузить реестр в Zenith.")
+                    .append(lineSeparator);
+            body.append(indent)
+                    .append("Подробности доступны в журнале Zenith.")
+                    .append(lineSeparator);
+            return;
+        }
+
+        body.append(indent)
+                .append(value(summary.message()))
+                .append(lineSeparator);
+    }
+
+    /** Добавляет в текст понятный результат: ошибку, пустой отчет либо найденных лиц. */
+    private void appendCheckResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
         String lineSeparator = System.lineSeparator();
 
         if (summary == null) {
@@ -103,17 +187,20 @@ public final class ZenithNotificationTextBuilder {
                     .append(value(person.displayName()))
                     .append(lineSeparator);
             body.append(indent)
-                    .append("    Номер счета: ")
+                    .append(indent)
+                    .append("Номер счета: ")
                     .append(value(person.accountNumber()))
                     .append(lineSeparator);
             body.append(indent)
-                    .append("    Организация: ")
+                    .append(indent)
+                    .append("Организация: ")
                     .append(value(person.emitentName()))
                     .append(lineSeparator);
 
             if (person.packageDirectory() != null) {
                 body.append(indent)
-                        .append("    Черновики ФЭС: ")
+                        .append(indent)
+                        .append("Черновики ФЭС: ")
                         .append(normalize(person.packageDirectory()))
                         .append(lineSeparator);
             }
@@ -129,12 +216,14 @@ public final class ZenithNotificationTextBuilder {
                 .append(lineSeparator);
     }
 
+    /** Добавляет путь к XLSX-отчету, когда Zenith его сформировал. */
     private void appendReportFile(StringBuilder body, ZenithProcessingSummary summary, String lineSeparator) {
         if (summary != null && summary.reportFile() != null) {
             body.append("Отчет: ").append(normalize(summary.reportFile())).append(lineSeparator);
         }
     }
 
+    /** Преобразует внутренний код каталога в название для сотрудника. */
     private String displayCatalogName(String catalog) {
         if (catalog == null) {
             return "Неизвестный перечень";
@@ -149,10 +238,12 @@ public final class ZenithNotificationTextBuilder {
         };
     }
 
+    /** Подставляет дефис вместо отсутствующего значения в пользовательском тексте. */
     private String value(String value) {
         return value == null || value.isBlank() ? "-" : value;
     }
 
+    /** Нормализует разделители пути для читаемого текста уведомления. */
     private String normalize(Path path) {
         return path.toString().replace('\\', '/');
     }

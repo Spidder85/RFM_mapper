@@ -1,36 +1,137 @@
-# Актуальная инструкция по незавершенным доработкам
+# Retention: события, реестры, отчеты и логи
 
-Дата сверки: 2026-07-13.
+Дата: 2026-07-21.
 
-Документ содержит только пункты, которые еще требуют изменения или проверки. Уже реализованные части из старого документа удалены, чтобы не предлагать выполнить их повторно.
+## Решение
 
-## Что уже реализовано и не нужно переделывать
+| Данные | Срок хранения |
+|---|---|
+| Скачанные реестры | Бессрочно по умолчанию |
+| XLSX-отчеты Zenith | Бессрочно |
+| Черновики ФЭС | Бессрочно |
+| RFM audit | `KeepAuditDays` |
+| Логи RFM и Zenith | 30 дней |
+| `processed`, `failed`, `results` events | 30 дней |
+| `new`, `processing`, `retry` events | Не удаляются автоматически |
 
-1. `zenith-processor --drain` продолжает работу после ошибки одного события: проблемное событие переносится в `failed`, следующие остаются доступными для обработки.
-2. Ответ Zenith о том, что импортируемый список старее уже загруженного, распознается как штатно пропущенное событие (`skipped`).
-3. Отсутствие листа `Таблица_Проверок` в XLSX означает пустой результат, а не ошибку.
-4. Полный workflow публикует `ZenithImportCompleted` для офисных очередей после успешного импорта.
-5. Завершенные events (`processed`, `failed`, `results`) удаляются через 30 дней. Каталоги `new` и `processing` намеренно не очищаются автоматически.
-6. Текст результатов Zenith уже вынесен в общий `common`-класс `ZenithNotificationTextBuilder` и используется как отдельным Zenith-уведомлением, так и в общем уведомлении RFM.
-7. Во все production-классы добавлены краткие Javadoc-комментарии; в точках входа и бизнес-сервисах прокомментированы ключевые методы.
+## Текущее состояние
 
-## 1. Зафиксировать правило единственного уведомления
+1. `EventRetentionService` уже удаляет только `processed`, `failed`, `results` старше 30 дней. Он не касается XLSX-отчетов.
+2. `ZenithProcessorMain.applyEventRetention(...)` уже вызывается после `once`/`drain` и после каждой итерации `watch`. Поэтому events Zenith не накапливаются бесконечно.
+3. В обоих `logback.xml` задано `maxHistory=30` и `totalSizeCap=300MB`: архивы логов очищаются автоматически.
+4. Реальная проблема только одна: RFM очищает events внутри `applyRetentionIfNeeded(...)`, а тот сразу завершается при `Retention.Enabled=false`. Очистку events надо отделить от хранения реестров и audit.
 
-### Текущее поведение
+## 1. Бессрочное хранение реестров
 
-Дублирование уже предотвращается кодом `rfm-downloader`:
+### 1.1. Файл RetentionConfig
+
+Файл:
 
 ```text
-RFM Notifications.Enabled = true
-и
-ZenithTrigger.SuppressNotificationWhenRfmNotificationEnabled = true
+rfm-downloader/src/main/java/org/ikozmin/rfm/config/RetentionConfig.java
 ```
 
-Тогда RFM запускает Zenith с параметром `--suppress-notification`, Zenith сохраняет summary, а итоговое письмо или Telegram-сообщение отправляет только RFM.
+Заменить файл полностью:
 
-Если RFM-уведомления выключены, автономный Zenith может отправить собственное уведомление по своей конфигурации.
+```java
+package org.ikozmin.rfm.config;
 
-### Что изменить
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+/**
+ * Настройки хранения audit и скачанных реестров.
+ * KeepDownloadedVersions <= 0 означает бессрочное хранение реестров.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+public final class RetentionConfig {
+    @JsonProperty("Enabled")
+    private boolean enabled;
+
+    @JsonProperty("KeepAuditDays")
+    private Integer keepAuditDays;
+
+    @JsonProperty("KeepDownloadedVersions")
+    private Integer keepDownloadedVersions;
+
+    public boolean isEnabled() {
+        return enabled;
+    }
+
+    public int getKeepAuditDays() {
+        return keepAuditDays == null ? 30 : keepAuditDays;
+    }
+
+    /**
+     * Возвращает число хранимых версий; 0 означает не удалять реестры.
+     */
+    public int getKeepDownloadedVersions() {
+        return keepDownloadedVersions == null ? 0 : keepDownloadedVersions;
+    }
+}
+```
+
+Поля `KeepProcessedEventDays`, `KeepFailedEventDays`, `KeepResultEventDays` удалить: они больше не используются. Для завершенных событий всегда применяется общий срок 30 дней.
+
+### 1.2. Файл RetentionService
+
+Файл:
+
+```text
+rfm-downloader/src/main/java/org/ikozmin/rfm/service/RetentionService.java
+```
+
+Заменить метод `cleanDownloadedVersions(...)` полностью:
+
+```java
+/**
+ * Удаляет старые версии только при положительном лимите.
+ * Ноль и отрицательные значения означают бессрочное хранение реестров.
+ */
+private void cleanDownloadedVersions(Path downloadDir, CatalogType catalogType) {
+    if (!Files.isDirectory(downloadDir)) {
+        return;
+    }
+
+    int keep = config.getKeepDownloadedVersions();
+
+    if (keep <= 0) {
+        log.info("Downloaded registry retention is disabled. catalog={}", catalogType.getCode());
+        return;
+    }
+
+    String expectedPrefix = catalogType.getFilePrefix() + "_";
+    String expectedSuffix = "." + catalogType.getExtension();
+
+    try (Stream<Path> files = Files.walk(downloadDir)) {
+        List<Path> registryFiles = files
+                .filter(Files::isRegularFile)
+                .filter(file -> {
+                    String name = file.getFileName().toString();
+                    return name.startsWith(expectedPrefix) && name.endsWith(expectedSuffix);
+                })
+                .sorted(Comparator.comparing(this::lastModified).reversed())
+                .toList();
+
+        if (registryFiles.size() <= keep) {
+            return;
+        }
+
+        registryFiles.stream()
+                .skip(keep)
+                .forEach(this::deleteQuietly);
+    } catch (Exception e) {
+        log.warn("Downloaded files retention failed. dir={}, catalog={}, error={}",
+                downloadDir,
+                catalogType.getCode(),
+                e.getMessage());
+    }
+}
+```
+
+Другие методы `RetentionService` не менять. Он удаляет audit по сроку, но не удаляет XLSX-отчеты: их имена не совпадают с префиксами файлов реестров.
+
+### 1.3. Конфиг RFM
 
 Файл:
 
@@ -38,195 +139,146 @@ ZenithTrigger.SuppressNotificationWhenRfmNotificationEnabled = true
 rfm-downloader/config/config.template.json
 ```
 
-В существующий объект `ZenithTrigger` добавить явную настройку. Весь объект после изменения должен выглядеть так:
+Заменить объект `Retention` полностью:
 
 ```json
-"ZenithTrigger": {
+"Retention": {
   "Enabled": true,
-  "Command": "run-zenith-drain.bat --mode FULL",
-  "WorkingDirectory": ".",
-  "TimeoutSeconds": 1800,
-  "SuppressNotificationWhenRfmNotificationEnabled": true
+  "KeepAuditDays": 60,
+  "KeepDownloadedVersions": 0
 }
 ```
 
-Зачем: значение и без того по умолчанию равно `true`, но явная настройка делает правило понятным сотруднику, который будет сопровождать конфиг.
+В рабочем `rfm-downloader/config/config.json` также установить:
 
-Рабочий `config.json` менять аналогично только при необходимости явного документирования. Логику Java менять не нужно.
+```json
+"KeepDownloadedVersions": 0
+```
 
-## 2. Исправить формат и ротацию лога Zenith
+`0` означает «хранить все версии». Чтобы включить лимит, указать положительное число, например `10`.
 
-Сейчас `zenith-processor` пишет ротационные файлы с расширением `.log` и выводит имя класса logger. Требование TODO: архивировать старые логи и оставлять только важность с текстом.
+## 2. Всегда очищать завершенные events RFM
 
 Файл:
 
 ```text
-zenith-processor/src/main/resources/logback.xml
-```
-
-Заменить файл полностью:
-
-```xml
-<?xml version="1.0" encoding="UTF-8" ?>
-<configuration>
-    <property name="LOG_DIR" value="logs"/>
-    <property name="LOG_FILE" value="${LOG_DIR}/zenith-processor.log"/>
-
-    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <charset>UTF-8</charset>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>${LOG_FILE}</file>
-
-        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>${LOG_DIR}/zenith-processor.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-            <maxFileSize>10MB</maxFileSize>
-            <maxHistory>30</maxHistory>
-            <totalSizeCap>300MB</totalSizeCap>
-        </rollingPolicy>
-
-        <encoder>
-            <charset>UTF-8</charset>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss} %-5level - %msg%n</pattern>
-        </encoder>
-    </appender>
-
-    <logger name="org.ikozmin.zenith" level="INFO"/>
-
-    <root level="INFO">
-        <appender-ref ref="CONSOLE"/>
-        <appender-ref ref="FILE"/>
-    </root>
-</configuration>
-```
-
-Результат:
-
-```text
-logs/zenith-processor.log
-logs/zenith-processor.2026-07-13.0.log.gz
-```
-
-После ротации старый файл будет сжат, активный всегда остается `zenith-processor.log`. Имя Java-класса в строку лога не выводится.
-
-## 3. Дополнить итог drain информацией о failed-событиях
-
-Код уже не прерывает очередь при ошибке одного события, но в завершающем сообщении не показывает число ошибок.
-
-Файл:
-
-```text
-zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java
+rfm-downloader/src/main/java/org/ikozmin/rfm/Main.java
 ```
 
 Найти метод:
 
 ```java
-private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
+private void applyRetentionIfNeeded(AppConfig config, Path workDir, Path downloadDir, List<CatalogType> catalogTypes) {
 ```
 
 Заменить метод полностью:
 
 ```java
-private Integer processDrain(ZenithConfig config, ZenithWorkflowMode workflowMode) {
-    int processed = 0;
-    int failed = 0;
+/**
+ * Применяет retention к audit и реестрам при включенной настройке,
+ * а завершенные events очищает всегда.
+ */
+private void applyRetentionIfNeeded(
+        AppConfig config,
+        Path workDir,
+        Path downloadDir,
+        List<CatalogType> catalogTypes
+) {
+    RetentionService retentionService = new RetentionService(config.getRetention());
 
-    while (true) {
-        int exitCode = processOnce(config, workflowMode, false);
-
-        if (exitCode == EXIT_NO_EVENTS) {
-            log.info("Zenith drain completed. processedEvents={}, failedEvents={}", processed, failed);
-            return EXIT_OK;
+    if (retentionService.isEnabled()) {
+        for (CatalogType catalogType : catalogTypes) {
+            retentionService.apply(workDir, downloadDir, catalogType);
         }
+    } else {
+        log.info("Registry and audit retention is disabled");
+    }
 
-        if (exitCode == EXIT_EVENT_FAILED) {
-            failed++;
-            continue;
-        }
+    Path eventRootDir = Path.of(config.getEvents() == null
+            ? "events/registry-updated"
+            : config.getEvents().getDirectory()
+    );
 
-        if (exitCode != EXIT_OK) {
-            return exitCode;
-        }
+    new EventRetentionService().apply(eventRootDir);
+}
+```
 
-        processed++;
+Зачем: `Retention.Enabled=false` больше не приводит к вечному накоплению `processed`, `failed`, `results` в RFM. Папки `new`, `processing`, `retry` не затрагиваются.
+
+## 3. Zenith events: код не менять
+
+В `zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java` уже есть корректный метод:
+
+```java
+private void applyEventRetention(ZenithConfig config) {
+    EventRetentionService retentionService = new EventRetentionService();
+
+    retentionService.apply(Path.of(config.getEvents().getRegistryUpdatedDirectory()));
+
+    for (String directory : config.getEvents().getImportCompletedDirectories()) {
+        retentionService.apply(Path.of(directory));
+    }
+
+    String checkDirectory = config.getEvents().getCheckDirectory();
+
+    if (checkDirectory != null && !checkDirectory.isBlank()) {
+        retentionService.apply(Path.of(checkDirectory));
     }
 }
 ```
 
-Зачем: по одной итоговой строке журнала сразу видно, была ли очередь обработана полностью без ошибок. Код завершения `drain` остается `0`: это корректно, потому что очередь разобрана, а ошибочные события уже лежат в `failed`.
+Он очищает завершенные события всех доступных Zenith очередей. Повторный вызов для одинакового пути безопасен.
 
-## 4. Проверить сохранение XLSX-отчета, не меняя код без подтвержденной ошибки
+## 4. Отчеты Zenith: код не менять
 
-Код `ZenithReportService` уже делает необходимое:
-
-```java
-Path outputDir = resolveAppPath(config.getOutputDirectory());
-Files.createDirectories(outputDir);
-Path targetFile = outputDir.resolve(fileName);
-apiClient.downloadOutgoingDocument(outDoc.id(), REPORT_FORMAT, targetFile);
-```
-
-Поэтому сначала проверить фактическую конфигурацию и журнал, а не менять реализацию.
-
-Для рабочего `zenith-config.json` у нужного каталога должен быть заполнен блок, например:
-
-```json
-"te21": {
-  "Enabled": true,
-  "OutDocType": 10217,
-  "Filter": true,
-  "FilterTemplatePath": "config/zenith/podft-report-filter-te21.xml",
-  "OutputDirectory": "downloads/zenith-reports/te21",
-  "FileNamePrefix": "T38_terr"
-}
-```
-
-Относительный `OutputDirectory` разрешается от `app.home`, который задают bat-скрипты. После запуска искать отчет нужно в:
+XLSX-отчеты должны располагаться только в каталоге:
 
 ```text
-<папка zenith-processor>/downloads/zenith-reports/te21
+Zenith.Reports.<catalog>.OutputDirectory
 ```
 
-Если каталога нет, в логе должна быть строка `Creating Zenith report` или ошибка до нее. Если строка есть, но файла нет, приложить фрагмент лога от `Creating Zenith report` до `Zenith report downloaded`.
-
-## 5. Важная проверка шаблона BaseUrl
-
-`ZenithApiClient` самостоятельно добавляет путь `/zenith-object/api/...`. Поэтому значение `Zenith.BaseUrl` не должно уже содержать `/zenith-object`.
-
-Файл:
-
-```text
-zenith-processor/config/zenith-config.template.json
-```
-
-Заменить:
+Пример:
 
 ```json
-"BaseUrl": "https://zenith-server/zenith-object"
+"OutputDirectory": "downloads/zenith-reports/te21"
 ```
 
-на:
-
-```json
-"BaseUrl": "https://zenith-server"
-```
-
-И аналогично проверить рабочий `zenith-config.json`.
-
-Иначе итоговый URL станет ошибочным:
+Правильная структура:
 
 ```text
-https://zenith-server/zenith-object/zenith-object/api/...
+downloads/
+  zenith-reports/
+    te21/
+    un/
+    mvk/
+  fes-packages/
+
+events/
+  registry-updated/
+  zenith-imported/
 ```
 
-## 6. Проверка после изменений
+Не размещать отчеты в `events/.../processed`, `failed` или `results`. `EventRetentionService` в `downloads` не заходит, поэтому XLSX и черновики ФЭС не удалит.
 
-Из корня Maven-проекта:
+## 5. Логи: код не менять
+
+В обоих файлах:
+
+```text
+rfm-downloader/src/main/resources/logback.xml
+zenith-processor/src/main/resources/logback.xml
+```
+
+уже настроено:
+
+```xml
+<maxHistory>30</maxHistory>
+<totalSizeCap>300MB</totalSizeCap>
+```
+
+Архивы логов автоматически удаляются после 30 дней. Активные `rfm-client.log` и `zenith-processor.log` не удаляются, пока используются процессом.
+
+## 6. Проверка
 
 ```bat
 mvn clean package
@@ -234,10 +286,8 @@ mvn clean package
 
 Проверить:
 
-1. Запуск `run-zenith-drain.bat --mode FULL` обрабатывает все события из `new`.
-2. Ошибочное событие оказывается в `failed`, а следующие обрабатываются.
-3. В конце есть строка `Zenith drain completed. processedEvents=..., failedEvents=...`.
-4. При запуске из RFM включены оба блока `Notifications`, но приходит только одно итоговое уведомление от RFM.
-5. При автономном запуске Zenith и выключенных уведомлениях RFM приходит только уведомление Zenith.
-6. После следующей даты старый лог имеет имя `zenith-processor.YYYY-MM-DD.N.log.gz`.
-7. Отчет находится в каталоге из `Reports.<catalog>.OutputDirectory`.
+1. При `KeepDownloadedVersions: 0` после более чем 10 загрузок все версии реестра остаются на диске.
+2. Тестовые файлы старше 30 дней из `processed`, `failed`, `results` удаляются после запуска RFM и Zenith.
+3. Файлы из `new`, `processing`, `retry` не удаляются.
+4. Старый XLSX в `downloads/zenith-reports/te21` остается после всех retention-процедур.
+5. Архивы логов старше 30 дней удаляются Logback.

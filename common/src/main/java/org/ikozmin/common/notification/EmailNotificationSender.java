@@ -36,24 +36,31 @@ public final class EmailNotificationSender implements NotificationSender {
     }
 
     @Override
+    public void send(NotificationMessage message) {
+        send(message, NotificationPurpose.DEFAULT);
+    }
+
+    @Override
     /**
      * Отправляет письмо всем получателям из конфигурации.
      */
-    public void send(NotificationMessage message) {
+    public void send(NotificationMessage message, NotificationPurpose purpose) {
         if (!isEnabled()) {
             return;
         }
 
+        List<String> recipients = config.getRecipients(purpose);
+
         try {
-            validate();
+            validate(recipients);
 
             Path attachment = message.attachments().isEmpty()
                     ? null
                     : message.attachments().getFirst();
 
-            sendEmail(message.subject(), message.body(), config.getTo(), attachment);
+            sendEmail(message.subject(), message.body(), recipients, attachment);
 
-            log.info("Email notification sent. recipients={}", config.getTo().size());
+            log.info("Email notification sent. purpose={}, recipients={}", purpose, recipients.size());
         } catch (Exception e) {
             log.error("Failed to send email notification: {}", e.getMessage(), e);
         }
@@ -111,7 +118,7 @@ public final class EmailNotificationSender implements NotificationSender {
         });
     }
 
-    private void validate() {
+    private void validate(List<String> recipients) {
         if (isBlank(config.getSmtpHost())) {
             throw new IllegalStateException("Notifications.Email.SmtpHost is empty");
         }
@@ -120,8 +127,8 @@ public final class EmailNotificationSender implements NotificationSender {
             throw new IllegalStateException("Notifications.Email.From is empty");
         }
 
-        if (config.getTo() == null || config.getTo().isEmpty()) {
-            throw new IllegalStateException("Notifications.Email.To is empty");
+        if (recipients == null || recipients.isEmpty()) {
+            throw new IllegalStateException("Notifications.Email recipients are empty");
         }
     }
 

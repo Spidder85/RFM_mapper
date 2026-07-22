@@ -54,12 +54,22 @@ public final class RetentionService {
         }
     }
 
+    /**
+     * Удаляет старые версии только при положительном лимите.
+     * Ноль и отрицательные значения означают бессрочное хранение реестров.
+     */
     private void cleanDownloadedVersions(Path downloadDir, CatalogType catalogType) {
         if (!Files.isDirectory(downloadDir)) {
             return;
         }
 
-        int keep = Math.max(1, config.getKeepDownloadedVersions());
+        int keep = config.getKeepDownloadedVersions();
+
+        if (keep <= 0) {
+            log.info("Downloaded registry retention is disabled. catalog={}", catalogType.getCode());
+            return;
+        }
+
         String expectedPrefix = catalogType.getFilePrefix() + "_";
         String expectedSuffix = "." + catalogType.getExtension();
 

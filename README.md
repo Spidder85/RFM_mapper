@@ -1,129 +1,118 @@
 # RFM Automation
 
-RFM Automation is a Java 21 multi-module command-line project for downloading Rosfinmonitoring registry updates, importing the updated terrorist/extremist registry into Zenith, checking Zenith results, preparing draft FES files, and sending one unified notification after all enabled processing stages are complete.
+RFM Automation is a Java 21 command-line system for receiving Rosfinmonitoring registry updates, processing them in Zenith, preparing draft FES packages, and delivering operational notifications.
 
-The project is intended for scheduled execution, for example once per hour from Windows Task Scheduler.
+It is designed for unattended Windows Task Scheduler runs, normally once per hour. The system does not automatically send FES to Rosfinmonitoring: an employee reviews the draft and makes the final decision.
+
+## What It Does
+
+- Downloads current Rosfinmonitoring registries through the Service Concentrator API.
+- Supports terrorists/extremists, UN and MVK registries.
+- Uses a client certificate, including CryptoPro CSP/JCP/JTLS installations.
+- Publishes file-based events between servers.
+- Imports updated registries into Zenith.
+- Runs Zenith AML/CFT mass checks, downloads XLSX reports and detects new matches.
+- Creates draft FES files for new matches.
+- Sends clear email and Telegram notifications.
+- Retries temporary Zenith failures and preserves permanent failures for investigation.
+
+## Architecture
+
+The recommended production deployment uses three independent scheduled stages:
+
+```text
+Server 1                         Server 2                         Server 3
+--------                         --------                         --------
+rfm-downloader                   zenith-processor                 zenith-processor
+download only                    IMPORT_ONLY                       CHECK_ONLY
+
+RegistryUpdated event  ------->  import to Zenith  ------------->  mass check
+                                 ImportCompleted event             report / analysis / FES drafts
+                                 import notification               check notification
+```
+
+`FULL` mode remains available for a single-server deployment. In the three-server scenario, Server 3 must use `CHECK_ONLY`, otherwise it would import the registry a second time.
 
 ## Modules
 
-| Module | Purpose |
+| Module | Responsibility |
 | --- | --- |
-| `common` | Shared JSON, file event, Zenith summary, and notification contracts. |
-| `rfm-downloader` | Authenticates in Rosfinmonitoring, checks registry versions, downloads files, publishes update events, runs Zenith, and sends the final notification. |
-| `zenith-processor` | Consumes registry update events, imports XML into Zenith, runs mass check, downloads the report, analyzes it, and prepares draft FES packages. |
-| `distribution` | Builds the final ZIP package with jars, dependencies, scripts, configs, and Zenith filter files. |
-
-## Current Flow
-
-1. `rfm-downloader` authenticates in the Rosfinmonitoring Service Concentrator API.
-2. It checks the selected registry by `idXml`.
-3. If a new version exists, it downloads the registry archive or XML.
-4. For ZIP registries, it extracts the XML file.
-5. It publishes `events/registry-updated/new/*.json`; the event points to the extracted XML, not to the ZIP archive.
-6. It runs `zenith-processor`.
-7. `zenith-processor` imports the XML into Zenith, runs mass check, creates and downloads the `Xlsx` report.
-8. The report analyzer reads `Таблица_Проверок`, deduplicates rows by person key, and compares the result with the local TSV database.
-9. For new persons, draft FES files are created under `downloads/fes-packages`.
-10. `zenith-processor` writes `events/registry-updated/results/<eventId>-zenith-summary.json`.
-11. `rfm-downloader` reads the Zenith summary and sends one unified notification through enabled channels.
-
-Automatic FES sending to Rosfinmonitoring is not implemented. A human employee reviews the prepared drafts and decides what to do next.
+| `common` | Shared JSON support, event queues, retry/retention logic, processing summaries and notification contracts. |
+| `rfm-downloader` | Rosfinmonitoring authentication, registry version check, download, extraction, audit and `RegistryUpdated` publication. |
+| `zenith-processor` | Zenith import, mass check, report download/analysis, draft FES preparation and notifications. |
+| `distribution` | Assembles the deployable ZIP package with applications, dependencies, scripts and runtime configuration. |
 
 ## Technology Stack
 
 - Java 21
 - Maven multi-module build
-- CryptoPro CSP/JCP/JTLS
+- picocli command-line interface
 - Java `HttpClient`
-- Jackson
-- SLF4J + Logback
-- Jakarta Mail
-- Telegram Bot API through `curl --resolve`
-- Apache POI for Zenith `Xlsx` report parsing
-- picocli
-- JUnit 5, Mockito, AssertJ
+- Jackson for JSON and Java time types
+- SLF4J with Logback
+- Apache POI for Zenith XLSX reports
+- Jakarta Mail for SMTP notifications
+- Telegram Bot API through `curl.exe --resolve` for networks where the standard Telegram endpoint is unavailable
+- CryptoPro CSP, JCP and JTLS for client-certificate TLS
+- JUnit 5, Mockito and AssertJ for automated tests
 
 ## Supported Registries
 
-| Code | Description |
+| Code | Registry |
 | --- | --- |
 | `te21` | Current terrorists and extremists registry |
 | `te2` | Legacy terrorists and extremists registry |
-| `mvk` | MVK freeze registry |
+| `mvk` | MVK decisions registry |
 | `un` | UN registry |
-| `un-rus` | UN registry, Russian version |
+| `un-rus` | Russian-language UN registry |
 
-Default catalog: `te21`.
+## Processing Modes
 
-## Distribution Layout
+| Mode | Purpose |
+| --- | --- |
+| `FULL` | Import, publish office events, run check, download report and prepare FES drafts. |
+| `IMPORT_ONLY` | Import a new registry into Zenith and publish `ZenithImportCompleted` events for checking servers. |
+| `CHECK_ONLY` | Consume `ZenithImportCompleted`, run the check, download/analyze the report and prepare FES drafts. |
 
-The final ZIP is built by the `distribution` module:
+The processor supports `--once`, `--drain` and `--watch`. For scheduled servers, use `--drain` so all currently available events are processed as one batch.
 
-```text
-target/distr/rfm-automation-2.1.2.zip
-```
+## Events and Retry
 
-Expected layout inside the ZIP:
-
-```text
-rfm-downloader.jar
-zenith-processor.jar
-libs/
-config/
-  config.json
-  zenith-config.json
-  zenith/
-    podft-report-filter.xml
-run-rfm.bat
-run-zenith-once.bat
-```
-
-Runtime directories are created near the scripts:
+Each queue has the following lifecycle:
 
 ```text
-downloads/
-events/
-data/
-logs/
+new -> processing -> processed
+                  -> retry  -> new
+                  -> failed
 ```
 
-## Configuration
+- Temporary connectivity errors, timeouts and retryable Zenith responses are moved to `retry` and retried later.
+- Invalid or non-retryable events are moved to `failed`.
+- Before processing, the queue keeps only the latest pending event for each registry. Older pending events of the same registry are removed.
+- Completed event files and summaries are retained for 30 days. Pending and retry events are not deleted automatically.
 
-Main RFM config:
+## Notifications
+
+Notifications are optional and disabled by default.
+
+- `IMPORT_ONLY` sends one summary about registries successfully uploaded to Zenith.
+- `CHECK_ONLY` and `FULL` send one summary about check results, found persons and draft FES packages.
+- `Email.ImportTo` is optional. When configured, it receives import notifications; otherwise the normal `Email.To` list is used.
+- Telegram uses the configured `ChatIds` for every enabled Zenith notification.
+- When RFM launches Zenith itself, Zenith notifications can be suppressed so only one combined notification is delivered.
+
+## Important Configuration
+
+Runtime configuration is stored near the deployed scripts:
 
 ```text
 config/config.json
-```
-
-Zenith config:
-
-```text
 config/zenith-config.json
 ```
 
-Important paths:
+Do not commit real passwords, certificate identifiers, tokens, downloaded files, reports, logs or draft FES packages.
 
-```json
-{
-  "Events": {
-    "Directory": "events/registry-updated"
-  },
-  "Results": {
-    "Directory": "events/registry-updated/results"
-  },
-  "Zenith": {
-    "Fes": {
-      "OutputDirectory": "downloads/fes-packages"
-    },
-    "Report": {
-      "FilterTemplatePath": "config/zenith/podft-report-filter.xml",
-      "OutputDirectory": "downloads/zenith-reports"
-    }
-  }
-}
-```
-
-Secrets can also be supplied by environment variables where supported:
+Environment variables supported by the application include:
 
 ```text
 RFM_USERNAME
@@ -132,155 +121,64 @@ RFM_CERT_SERIAL
 ZENITH_PASSWORD
 ```
 
-Do not commit real credentials, private keys, downloaded registries, logs, or produced FES drafts.
+For `Zenith.BaseUrl`, specify the server base URL only, for example:
 
-## Run
+```json
+"BaseUrl": "https://zenith-server"
+```
 
-Normal full run:
+The application adds `/zenith-object/api/...` itself.
+
+## Storage and Retention
+
+```text
+downloads/zenith-reports/   Zenith XLSX reports, retained indefinitely
+downloads/fes-packages/     Draft FES packages, retained indefinitely
+events/.../processed/       Completed events, retained for 30 days
+events/.../failed/          Failed events, retained for 30 days
+events/.../results/         Processing summaries, retained for 30 days
+logs/                       Logback archives, retained for 30 days
+```
+
+Set `Retention.KeepDownloadedVersions` to `0` to retain downloaded Rosfinmonitoring registries indefinitely. A positive value enables a version limit. Audit retention is controlled separately by `Retention.KeepAuditDays`.
+
+## Build and Distribution
+
+Build all modules from the project root:
+
+```bat
+mvn clean package
+```
+
+The distribution ZIP is created under:
+
+```text
+target/distr/rfm-automation-<version>.zip
+```
+
+The package contains application JARs, dependencies, operational scripts and working configuration files.
+
+## Operational Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `run-rfm.bat` | Run RFM download stage. |
+| `run-zenith-once.bat` | Process one Zenith event. |
+| `run-zenith-drain.bat` | Process all available Zenith events. |
+| `run-zenith-watch.bat` | Continuously poll a Zenith queue. |
+
+Example scheduled commands:
 
 ```bat
 run-rfm.bat
-```
-
-Manual Zenith-only run for already published events:
-
-```bat
-run-zenith-once.bat
-```
-
-Direct command example:
-
-```bat
-java -cp "rfm-downloader.jar;libs\*" org.ikozmin.rfm.Main --config config\config.json --prod --catalog te21
-```
-
-## Events
-
-Registry update events are stored in:
-
-```text
-events/registry-updated/
-  new/
-  processing/
-  processed/
-  failed/
-  results/
-```
-
-The event field `registryFile` must point to the XML file used by Zenith. For TE/MVK ZIP downloads, `rfm-downloader` extracts the XML and publishes the XML path in the event.
-
-Zenith writes the result summary to:
-
-```text
-events/registry-updated/results/<eventId>-zenith-summary.json
-```
-
-## Zenith Processing
-
-The Zenith processor performs these stages:
-
-1. Import registry XML to `/zenith-object/api/v1/opercontrol/person_lists`.
-2. Run AML/CFT mass check.
-3. Create report with `outDocType=10217`.
-4. Download report as `Xlsx`.
-5. Analyze the `Таблица_Проверок` sheet.
-6. Detect terrorist-list matches by `ЗЛ_РискОснования`.
-7. Deduplicate matches by normalized person name and account number.
-8. Compare matches with `data/zenith-found-persons.tsv`.
-9. Prepare draft FES packages for new persons.
-10. Save a summary JSON for the final notification.
-
-The local person database remains TSV for now:
-
-```text
-data/zenith-found-persons.tsv
-```
-
-H2 is intentionally not used yet. It becomes useful later when manual approval statuses, FES sending, tickets, and history need stronger querying and migrations.
-
-## Draft FES Packages
-
-Drafts are stored under:
-
-```text
-downloads/fes-packages/<check-date>/<person-key>/
-```
-
-Each package currently contains:
-
-```text
-FM03_DRAFT_<person-key>.xml
-FM03_DRAFT_<person-key>.xml.sig
-```
-
-The `.sig` file is a placeholder. Real detached CryptoPro signing and `formalized-message/send` are future stages.
-
-Current human workflow:
-
-```text
-FOUND -> DRAFT_PREPARED -> REVIEW_REQUIRED
-```
-
-Future workflow may add:
-
-```text
-APPROVED -> SENT -> TICKET_RECEIVED
-REJECTED
-```
-
-## Unified Notifications
-
-Notifications are sent once, after all enabled modules finish.
-
-The notification contains:
-
-1. RFM download section: catalog, idXml, XML path, checksum.
-2. Zenith section:
-   - "No new persons found", or
-   - list of new persons and draft FES package directories.
-3. Reminder that automatic sending to Rosfinmonitoring was not performed.
-
-Notification contracts live in `common`:
-
-```text
-org.ikozmin.common.notification.NotificationMessage
-org.ikozmin.common.notification.NotificationSender
-```
-
-Implementations live in `rfm-downloader`:
-
-```text
-EmailNotificationService
-TelegramNotificationService
-NotificationService
-UnifiedNotificationTextBuilder
-```
-
-Telegram uses `curl.exe --resolve api.telegram.org:443:<ApiIp>` so HTTPS still validates against `api.telegram.org` while connecting to a configured IP.
-
-## Known Limitation
-
-Zenith import currently returns HTTP 200 with an empty body. The project does not yet parse Zenith operation logs to determine how many records were added, changed, or removed during import. The next improvement should use the Zenith log/export endpoint if its returned text contains reliable counters.
-
-## Build
-
-From the Maven project root:
-
-```bat
-mvn -q clean package
-```
-
-Root directory:
-
-```text
-G:\tmp\fedfsm\java
+run-zenith-drain.bat --mode IMPORT_ONLY
+run-zenith-drain.bat --mode CHECK_ONLY
 ```
 
 ## Operational Notes
 
-- Run one instance at a time.
-- Prefer hourly scheduling.
-- Keep `config/`, `downloads/`, `events/`, `data/`, and `logs/` on persistent storage.
-- Check `events/registry-updated/failed` if Zenith processing fails.
-- Check `events/registry-updated/results` to inspect what Zenith reported.
-- Review draft FES files manually before any future sending step.
+- Run only one instance of each stage against the same queue at a time.
+- Grant the scheduled-service accounts read/write access to the relevant network event directories.
+- Keep `config`, `downloads`, `events`, `data` and `logs` on persistent storage.
+- Review `failed` events and Zenith logs when an event does not complete.
+- Review every generated FES draft before any future delivery to Rosfinmonitoring.

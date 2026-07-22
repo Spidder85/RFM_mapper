@@ -16,6 +16,7 @@ public record ZenithProcessingSummary(
         List<Person> persons,
         String message
 ) {
+    /** Создает результат для отключенного шага формирования отчета. */
     public static ZenithProcessingSummary disabled(String eventId) {
         return new ZenithProcessingSummary(
                 eventId,
@@ -29,6 +30,7 @@ public record ZenithProcessingSummary(
         );
     }
 
+    /** Создает штатно пропущенный результат, например для неактуального списка. */
     public static ZenithProcessingSummary skipped(String eventId, String message) {
         return new ZenithProcessingSummary(
                 eventId,
@@ -42,6 +44,7 @@ public record ZenithProcessingSummary(
         );
     }
 
+    /** Создает результат неуспешной обработки, пригодный для уведомления и диагностики. */
     public static ZenithProcessingSummary failed(String eventId, String message) {
         return new ZenithProcessingSummary(
                 eventId,
@@ -55,6 +58,7 @@ public record ZenithProcessingSummary(
         );
     }
 
+    /** Создает успешный результат отчета без новых лиц для подготовки ФЭС. */
     public static ZenithProcessingSummary noNewPersons(String eventId, Path reportFile, int totalPersons) {
         return new ZenithProcessingSummary(
                 eventId,
@@ -68,6 +72,7 @@ public record ZenithProcessingSummary(
         );
     }
 
+    /** Сведения об одном новом совпадении для уведомления и черновика ФЭС. */
     public record Person(
             String displayName,
             String accountNumber,

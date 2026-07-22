@@ -17,6 +17,7 @@ import java.util.zip.ZipInputStream;
 public final class RegistryFileValidator {
     private static final Logger log = LoggerFactory.getLogger(RegistryFileValidator.class);
 
+    /** Проверяет структуру ZIP или XML до сохранения новой версии реестра как актуальной. */
     public void validate(CatalogType catalogType, Path file) {
         if (catalogType == CatalogType.UN || catalogType == CatalogType.UN_RUS) {
             validateXml(file);
@@ -25,6 +26,7 @@ public final class RegistryFileValidator {
         }
     }
 
+    /** Проверяет, что ZIP читается и содержит допустимый набор файлов. */
     private void validateZip(Path file) {
         try (ZipInputStream zipInputStream = new ZipInputStream(
                 Files.newInputStream(file),
@@ -60,6 +62,7 @@ public final class RegistryFileValidator {
         }
     }
 
+    /** Проверяет, что XML-файл непустой и может быть разобран парсером. */
     private void validateXml(Path file) {
         try (InputStream inputStream = Files.newInputStream(file)) {
             XMLInputFactory factory = XMLInputFactory.newFactory();

@@ -15,11 +15,13 @@ public final class RetryPolicy {
     private final int maxAttempts;
     private final Duration initialDelay;
 
+    /** Создает политику повторов с начальной задержкой между временными сбоями. */
     public RetryPolicy(int maxAttempts, Duration initialDelay) {
         this.maxAttempts = maxAttempts;
         this.initialDelay = initialDelay;
     }
 
+    /** Выполняет возвращающую значение операцию с повторами только временных ошибок API. */
     public <T> T execute(String operation, Callable<T> callable) {
         RuntimeException last = null;
 
@@ -52,6 +54,7 @@ public final class RetryPolicy {
         throw last == null ? new IllegalStateException("Retry failed without exception") : last;
     }
 
+    /** Выполняет операцию без результата с теми же правилами повторов. */
     public void executeVoid(String operation, Runnable runnable) {
         execute(operation, () -> {
             runnable.run();
@@ -59,6 +62,7 @@ public final class RetryPolicy {
         });
     }
 
+    /** Определяет, допускает ли тип ошибки повтор запроса. */
     private boolean isRetryable(RuntimeException e) {
         if (e instanceof RfmApiException) {
             int status = ((RfmApiException) e).getStatusCode();
@@ -78,6 +82,7 @@ public final class RetryPolicy {
         return false;
     }
 
+    /** Приостанавливает поток между попытками и корректно обрабатывает прерывание. */
     private void sleep(Duration delay) {
         try {
             Thread.sleep(delay.toMillis());

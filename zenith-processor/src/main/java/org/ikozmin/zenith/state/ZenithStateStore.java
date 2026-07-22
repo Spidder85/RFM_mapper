@@ -10,10 +10,12 @@ import java.util.Properties;
 public final class ZenithStateStore {
     private final Path file;
 
+    /** Открывает указанное файловое хранилище состояния. */
     public ZenithStateStore(Path file) {
         this.file = file;
     }
 
+    /** Возвращает дату последней успешной проверки данного перечня. */
     public Optional<LocalDate> loadLastSuccessfulCheckDate(String catalog) {
         Properties properties = loadProperties();
         String value = properties.getProperty(key(catalog, "lastSuccessfulCheckDate"));
@@ -25,6 +27,7 @@ public final class ZenithStateStore {
         return Optional.of(LocalDate.parse(value));
     }
 
+    /** Загружает properties-файл или создает пустое состояние при первом запуске. */
     private Properties loadProperties() {
         Properties properties = new Properties();
 
@@ -40,6 +43,7 @@ public final class ZenithStateStore {
         }
     }
 
+    /** Сохраняет контрольную дату и идентификаторы успешно обработанного реестра. */
     public void saveSuccessfulCheck(String catalog, LocalDate checkDate, String idXml, String eventId) {
         try {
             Files.createDirectories(file.getParent());
@@ -57,6 +61,7 @@ public final class ZenithStateStore {
         }
     }
 
+    /** Строит namespaced-ключ свойства, исключающий пересечение разных перечней. */
     private String key(String catalog, String name) {
         String normalizedCatalog = catalog == null || catalog.isBlank()
                 ? "unknown"

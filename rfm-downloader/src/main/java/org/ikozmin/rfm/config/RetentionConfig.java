@@ -15,15 +15,6 @@ public final class RetentionConfig {
     @JsonProperty("KeepDownloadedVersions")
     private Integer keepDownloadedVersions;
 
-    @JsonProperty("KeepProcessedEventDays")
-    private Integer keepProcessedEventDays;
-
-    @JsonProperty("KeepFailedEventDays")
-    private Integer keepFailedEventDays;
-
-    @JsonProperty("KeepResultEventDays")
-    private Integer keepResultEventDays;
-
     public boolean isEnabled() {
         return enabled;
     }
@@ -32,19 +23,10 @@ public final class RetentionConfig {
         return keepAuditDays == null ? 30 : keepAuditDays;
     }
 
+    /**
+     * Возвращает число хранимых версий; 0 означает не удалять реестры.
+     */
     public int getKeepDownloadedVersions() {
-        return keepDownloadedVersions == null ? 10 : keepDownloadedVersions;
-    }
-
-    public int getKeepProcessedEventDays() {
-        return keepProcessedEventDays == null ? 30 : keepProcessedEventDays;
-    }
-
-    public int getKeepFailedEventDays() {
-        return keepFailedEventDays == null ? 180 : keepFailedEventDays;
-    }
-
-    public int getKeepResultEventDays() {
-        return keepResultEventDays == null ? 30 : keepResultEventDays;
+        return keepDownloadedVersions == null ? 0 : keepDownloadedVersions;
     }
 }

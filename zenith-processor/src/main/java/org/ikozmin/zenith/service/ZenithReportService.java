@@ -26,12 +26,14 @@ public final class ZenithReportService {
     private final ZenithApiClient apiClient;
     private final ZenithConfig.Report config;
 
+    /** Создает сервис выгрузки с API-клиентом и настройками конкретного типа отчета. */
     public ZenithReportService(ZenithApiClient apiClient, ZenithConfig.Report config) {
         this.apiClient = apiClient;
         this.config = config;
         this.stateStore = new ZenithStateStore(STATE_FILE);
     }
 
+    /** Создает отчет за период с последней успешной проверки и сохраняет его на диск. */
     public ZenithReportResult createAndDownloadReport(String eventId, String catalog, String idXml) {
         try {
             LocalDate endDate = LocalDate.now();
@@ -73,7 +75,7 @@ public final class ZenithReportService {
                     + "-"
                     + endDate.format(formatter)
                     + "_"
-                    + catalog
+                    + displayCatalogName(catalog)
                     + ".xlsx";
 
             Path targetFile = outputDir.resolve(fileName);
@@ -101,6 +103,22 @@ public final class ZenithReportService {
         }
     }
 
+    /** Преобразует внутренний код каталога в название для сотрудника. */
+    private String displayCatalogName(String catalog) {
+        if (catalog == null) {
+            return "Неизвестный перечень";
+        }
+
+        return switch (catalog.toLowerCase()) {
+            case "te2", "te21" -> "терр";
+            case "mvk" -> "решМВК";
+            case "un" -> "ООН";
+            case "un-rus" -> "ООНрус";
+            default -> catalog;
+        };
+    }
+
+    /** Загружает XML-фильтр отчета из каталога приложения. */
     private String loadFilterXml() throws Exception {
         Path filterPath = resolveAppPath(config.getFilterTemplatePath());
 
@@ -114,6 +132,7 @@ public final class ZenithReportService {
         return Files.readString(filterPath);
     }
 
+    /** Преобразует относительный путь конфигурации в путь относительно app.home. */
     private Path resolveAppPath(String value) {
         Path path = Path.of(value);
 

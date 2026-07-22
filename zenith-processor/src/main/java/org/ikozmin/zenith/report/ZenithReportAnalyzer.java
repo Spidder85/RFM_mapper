@@ -90,6 +90,7 @@ public final class ZenithReportAnalyzer {
         }
     }
 
+    /** Строит соответствие заголовков отчета и индексов их столбцов. */
     private Map<String, Integer> readHeader(Row row) {
         if (row == null) {
             throw new IllegalStateException("Zenith report header row is missing");
@@ -103,6 +104,7 @@ public final class ZenithReportAnalyzer {
         return result;
     }
 
+    /** Возвращает индекс обязательного столбца или сообщает о несовместимом формате отчета. */
     private int requiredColumn(Map<String, Integer> columns, String name) {
         Integer index = columns.get(name);
         if (index == null) {
@@ -111,6 +113,7 @@ public final class ZenithReportAnalyzer {
         return index;
     }
 
+    /** Безопасно преобразует ячейку Excel в отображаемую строку. */
     private String cell(Row row, int index) {
         Cell cell = row.getCell(index, Row.MissingCellPolicy.RETURN_BLANK_AS_NULL);
         if (cell == null) {
@@ -121,11 +124,13 @@ public final class ZenithReportAnalyzer {
         return  formatter.formatCellValue(cell);
     }
 
+    /** Отбирает совпадения, относящиеся именно к перечню террористов. */
     private boolean isTerroristMatch(String riskReason) {
         return riskReason != null
                 && riskReason.toLowerCase(Locale.forLanguageTag("ru-Ru")).contains("списке террористов");
     }
 
+    /** Нормализует ФИО для устойчивого поиска повторяющихся записей. */
     private String normalizeName(String value) {
         return value == null
                 ? ""
@@ -134,6 +139,7 @@ public final class ZenithReportAnalyzer {
                 .toUpperCase(Locale.forLanguageTag("ru-RU"));
     }
 
+    /** Формирует ключ уникальности совпадения из ФИО и номера счета. */
     private String personKey(String normalizedName, String accountNumber) {
         String normalizedAccount = accountNumber == null
                 ? ""

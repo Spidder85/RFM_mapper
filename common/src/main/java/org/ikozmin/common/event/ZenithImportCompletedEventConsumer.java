@@ -17,12 +17,15 @@ public final class ZenithImportCompletedEventConsumer {
     private final Path processingDir;
     private final Path processedDir;
     private final Path failedDir;
+    private final EventRetryService retryService;
 
+    /** Инициализирует пути состояний офисной очереди относительно ее корня. */
     public ZenithImportCompletedEventConsumer(Path rootDir) {
         this.newDir = rootDir.resolve("new");
         this.processingDir = rootDir.resolve("processing");
         this.processedDir = rootDir.resolve("processed");
         this.failedDir = rootDir.resolve("failed");
+        this.retryService = new EventRetryService(rootDir);
     }
 
     /**
@@ -48,7 +51,6 @@ public final class ZenithImportCompletedEventConsumer {
 
                 Path source = next.get();
                 Path target = processingDir.resolve(source.getFileName());
-
                 Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
 
                 ZenithImportCompletedEvent event = JsonMapper.get()
@@ -66,6 +68,7 @@ public final class ZenithImportCompletedEventConsumer {
      */
     public void markProcessed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), processedDir.resolve(claimedEvent.file().getFileName()));
+        retryService.clear(claimedEvent.file());
     }
 
     /**
@@ -73,8 +76,18 @@ public final class ZenithImportCompletedEventConsumer {
      */
     public void markFailed(ClaimedEvent claimedEvent) {
         move(claimedEvent.file(), failedDir.resolve(claimedEvent.file().getFileName()));
+        retryService.clear(claimedEvent.file());
     }
 
+    public boolean markRetryable(ClaimedEvent claimedEvent, String error) {
+        return retryService.scheduleRetry(claimedEvent.file(), error);
+    }
+
+    public int requeueDueRetries() {
+        return retryService.requeueDueEvents();
+    }
+
+    /** Перемещает событие между состояниями офисной файловой очереди. */
     private void move(Path source, Path target) {
         try {
             Files.createDirectories(target.getParent());
@@ -84,6 +97,7 @@ public final class ZenithImportCompletedEventConsumer {
         }
     }
 
+    /** Захваченное офисное событие и его файл в processing. */
     public record ClaimedEvent(ZenithImportCompletedEvent event, Path file) {
     }
 }

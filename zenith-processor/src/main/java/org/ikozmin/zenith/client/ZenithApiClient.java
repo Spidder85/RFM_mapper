@@ -20,6 +20,7 @@ public final class ZenithApiClient {
     private final ZenithConfig.Zenith config;
     private final HttpClient httpClient;
 
+    /** Создает HTTP-клиент Zenith с ограничением времени установления соединения. */
     public ZenithApiClient(ZenithConfig.Zenith config) {
         this.config = config;
         this.httpClient = HttpClient.newBuilder()
@@ -27,7 +28,7 @@ public final class ZenithApiClient {
                 .build();
     }
 
-    // Загрузка списка лиц в Zenith
+    /** Загружает файл реестра в Zenith в требуемом формате и категории списка. */
     public void importPersonList(Path file, String fileFormat, String listCategory, boolean append) {
         if (file == null || !Files.isRegularFile(file)) {
             throw new IllegalArgumentException("Person list file not found: " + file);
@@ -61,7 +62,7 @@ public final class ZenithApiClient {
         sendNoBody(request, "import person list");
     }
 
-    // Запуск массовой проверки
+    /** Запускает массовую AML/CFT-проверку в Zenith. */
     public void runMassCheck(boolean periodic) {
         String query = "?periodic=" + periodic;
 
@@ -72,7 +73,7 @@ public final class ZenithApiClient {
         sendNoBody(request, "run AML/CFT mass check");
     }
 
-    // Получение фильтра по умолчанию для отчета outDocType
+    /** Получает стандартный фильтр для заданного типа исходящего документа. */
     public String getReportFilter(int outDocType) {
         HttpRequest request = base(uri("/zenith-object/api/v1/outgoing_documents/" + outDocType + "/filter"))
                 .GET()
@@ -81,7 +82,7 @@ public final class ZenithApiClient {
         return sendString(request, "get report filter");
     }
 
-    // отправка запроса на создание отчета
+    /** Создает исходящий документ отчета с параметрами периода и необязательным XML-фильтром. */
     public OutDocLink createReport(ReportCreateData data, String filterXml) {
         String boundary = "----ZenithBoundary" + System.currentTimeMillis();
 
@@ -122,7 +123,7 @@ public final class ZenithApiClient {
         }
     }
 
-    // выгрузка документа outDocId в формате format в файл targetFile
+    /** Скачивает готовый исходящий документ Zenith в указанный файл. */
     public void downloadOutgoingDocument(String outDocId, String format, Path targetFile) {
         try {
             Files.createDirectories(targetFile.getParent());
@@ -143,6 +144,7 @@ public final class ZenithApiClient {
         }
     }
 
+    /** Создает базовый HTTP-запрос с аутентификацией и общими заголовками Zenith. */
     private HttpRequest.Builder base(URI uri) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(uri)
@@ -157,7 +159,7 @@ public final class ZenithApiClient {
         return builder;
     }
 
-    // отправка запроса в Zenith и получение ответа в виде строчки
+    /** Выполняет запрос, ожидая текстовое тело ответа, и сохраняет типизированную ошибку API. */
     private String sendString(HttpRequest request, String operation) {
         try {
             HttpResponse<String> response = httpClient.send(
@@ -174,7 +176,7 @@ public final class ZenithApiClient {
         }
     }
 
-    // отправка запроса в Zenith без тела
+    /** Выполняет запрос, для которого важен только успешный HTTP-статус. */
     private void sendNoBody(HttpRequest request, String operation) {
         try {
             HttpResponse<String> response = httpClient.send(
@@ -190,7 +192,7 @@ public final class ZenithApiClient {
         }
     }
 
-    // проверка статуса ответа Zenith API
+    /** Проверяет диапазон успешных HTTP-статусов Zenith. */
     private void validate(int status, String operation, String body) {
         if (status >= 200 && status < 300) {
             return;
@@ -199,7 +201,7 @@ public final class ZenithApiClient {
         throw new ZenithApiException(operation, status, body);
     }
 
-    // формирование URI для Zenith API
+    /** Добавляет относительный путь API к базовому URL Zenith. */
     private URI uri(String path) {
         String baseUrl = config.getBaseUrl();
 
@@ -210,12 +212,13 @@ public final class ZenithApiClient {
         return URI.create(baseUrl + path);
     }
 
-    // формирование Basic Auth для Zenith API
+    /** Формирует значение HTTP Basic Authorization без вывода пароля в журнал. */
     private String basicAuth() {
         String value = config.getUserName() + ":" + config.getPassword();
         return "Basic " + Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8));
     }
 
+    /** Кодирует значение query-параметра URL в UTF-8. */
     private String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
