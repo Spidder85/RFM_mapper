@@ -4,6 +4,11 @@ RFM Automation is a Java 21 command-line system for receiving Rosfinmonitoring r
 
 It is designed for unattended Windows Task Scheduler runs, normally once per hour. The system does not automatically send FES to Rosfinmonitoring: an employee reviews the draft and makes the final decision.
 
+# Multilanguage README
+
+[![en](https://img.shields.io/badge/lang-en-red.svg)](./README.md)
+[![ru](https://img.shields.io/badge/lang-ru-green.svg)](./README_RUS.md)
+
 ## What It Does
 
 - Downloads current Rosfinmonitoring registries through the Service Concentrator API.
