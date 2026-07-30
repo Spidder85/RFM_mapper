@@ -3,6 +3,8 @@ package org.ikozmin.common.notification;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -27,6 +29,11 @@ public final class ZenithNotificationTextBuilder {
         body.append(lineSeparator);
         body.append("В Zenith завершена загрузка обновленных перечней Росфинмониторинга.")
                 .append(lineSeparator);
+        body.append(items.size() == 1 ?
+                "Перечень актуален " : "Перечни актуальны ")
+                .append("по состоянию на: ")
+                .append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")))
+                .append(lineSeparator).append(lineSeparator);
         body.append("Обработано перечней: ")
                 .append(items.size())
                 .append(lineSeparator);
