@@ -1,78 +1,55 @@
-# Корректная обработка ошибки публикации офисного события
+# Исправление частичной ошибки публикации офисных событий
 
-## Цель изменения
+## Согласованная цель
 
-Не менять порядок запуска, очереди, retry и архитектуру программы. Нужно исправить
-только обработку результата после успешного импорта в Zenith:
+Изменяется только обработка результата публикации служебных событий после успешной
+загрузки реестра в Zenith.
 
-* ошибка записи события в одну офисную папку не должна отменять результат импорта;
-* публикация для остальных офисов должна продолжаться;
-* исходное событие обновления реестра должно считаться обработанным, если XML уже
-  успешно импортирован в Zenith;
-* при полном успехе письмо должно сообщать только о загрузке реестра;
-* при частичной доставке письмо должно сообщать, что реестр загружен, перечислять
-  офисы, где автоматическая проверка не будет запущена, и предлагать выполнить её
-  вручную; путь, stacktrace и текст Java-исключения в письмо не включать.
+Не меняются:
 
-Повторная доставка, отдельный outbox и изменение расписания в эту задачу не входят.
-Недоступный офис не получит событие до следующего штатного обновления реестра; причина
-останется в журнале для администратора.
+* порядок запуска программ и режимы `IMPORT_ONLY`, `FULL`, `CHECK_ONLY`;
+* очередь событий, retry, retention и архивирование;
+* логика импорта XML в Zenith;
+* запуск проверки в офисах, куда служебное событие уже успешно передано.
 
-## Почему текущая реализация неверна
+Требуемое поведение:
 
-`ZenithImportEventPublisher.publish(...)` прерывает цикл при первой ошибке и выбрасывает
-`ZenithImportEventPublicationException`. Затем
-`ZenithProcessorMain.processRegistryUpdatedEvent(...)` формирует `failed`-summary и
-переносит исходное событие в `failed`. В логе 03.08.2026 это привело к счётчику
-`processedEvents=0, failedEvents=1`, хотя импорт XML в Zenith и публикация для трёх
-офисов уже завершились успешно.
+1. Если реестр загружен в Zenith и события созданы во всех офисных папках, результат
+   успешный, текст уведомления: `Реестр успешно загружен в Zenith.`
+2. Если реестр загружен в Zenith, но запись в одну или несколько офисных папок не
+   удалась, импорт всё равно успешный. Исходное событие переносится в `processed`.
+3. Ошибка одной папки не останавливает попытки записи в остальные папки.
+4. Уведомление перечисляет понятные названия недоступных офисов и сообщает, что в них
+   проверку надо выполнить вручную.
+5. Полный технический текст ошибки и UNC-путь остаются только в логе.
 
-Ошибка доступа к папке НЧ -- это ошибка публикации одного вторичного события, а не
-ошибка импорта перечня в Zenith.
+Никакой повторной доставки в этой доработке нет: если папка офиса недоступна, её
+клиент `CHECK_ONLY` не получит событие текущего реестра. Это явно сообщается в письме,
+и проверка в таком офисе запускается вручную.
 
-## 1. Результат публикации
+## Причина текущей ошибки
 
-**Создать файл:**
-`zenith-processor/src/main/java/org/ikozmin/zenith/event/ZenithImportPublicationResult.java`.
+Сейчас `ZenithImportEventPublisher.publish(...)` при первой ошибке записи выбрасывает
+`ZenithImportEventPublicationException`. Это исключение попадает в
+`ZenithProcessorMain.processRegistryUpdatedEvent(...)`, после чего всё исходное
+`RegistryUpdatedEvent` считается ошибочным.
 
-Этот объект передаёт в workflow полный результат попытки публикации: куда событие
-создано и для каких офисов создать его не удалось.
+В логе от 03.08.2026 XML был успешно импортирован в Zenith, а события были созданы для
+центрального сервера, АЛМ и ИЖ. Ошибка `AccessDeniedException` была только при создании
+папки НЧ. Несмотря на это, программа записала `processedEvents=0, failedEvents=1`.
+Такой итог неверен: сбой доставки технического события не является сбоем импорта
+реестра.
 
-```java
-package org.ikozmin.zenith.event;
+## 1. Добавить имена офисов в конфигурацию
 
-import java.util.List;
+Понятные названия нужны только для пользовательского уведомления. Технический путь
+остаётся в том же конфиге и используется для записи JSON-события.
 
-/** Результат публикации события о завершённом импорте по офисным очередям. */
-public record ZenithImportPublicationResult(
-        int destinationCount,
-        List<String> publishedDestinationNames,
-        List<String> failedDestinationNames
-) {
-    public ZenithImportPublicationResult {
-        publishedDestinationNames = List.copyOf(publishedDestinationNames);
-        failedDestinationNames = List.copyOf(failedDestinationNames);
-    }
-
-    /** Возвращает true, если хотя бы в одну офисную папку записать событие не удалось. */
-    public boolean hasFailures() {
-        return !failedDestinationNames.isEmpty();
-    }
-}
-```
-
-## 2. Понятные имена офисов в конфигурации
-
-Текущий список `ImportCompletedDirectories` содержит только технические пути. Чтобы в
-уведомлении было написано «Офис НЧ», а не UNC-путь, заменить этот список объектами с
-понятным именем офиса и его техническим путём.
-
-**Файлы:**
+**Файлы, где заменить блок `Events` полностью:**
 
 * `zenith-processor/config/zenith-config.template.json`;
-* рабочий `config/zenith-config.json` экземпляра с режимом `IMPORT_ONLY` или `FULL`.
-
-Заменить только блок `Events`:
+* рабочий `config/zenith-config.json` центрального экземпляра Zenith, работающего в
+  режиме `IMPORT_ONLY` или `FULL`.
 
 ```json
 "Events": {
@@ -99,30 +76,38 @@ public record ZenithImportPublicationResult(
 }
 ```
 
-`ImportCompletedDirectories` удалить. В конфигурации сервера, работающего только в
-`CHECK_ONLY`, блок `ImportCompletedDestinations` не обязателен, если `CheckDirectory`
-уже задан явно.
+Из этих двух файлов удалить старое свойство `ImportCompletedDirectories`.
 
-## 3. Модель конфигурации
+Конфигурации офисных экземпляров, которые запускаются только в `CHECK_ONLY`, менять
+не требуется: они используют свой `CheckDirectory` и не публикуют события другим
+офисам.
 
-**Файл:** `zenith-processor/src/main/java/org/ikozmin/zenith/config/ZenithConfig.java`.
+## 2. Изменить модель `Events`
 
-В классе `Events` удалить поле:
+**Файл:**
+`zenith-processor/src/main/java/org/ikozmin/zenith/config/ZenithConfig.java`.
+
+В nested-классе `Events` удалить старое поле и старый getter:
 
 ```java
 @JsonProperty("ImportCompletedDirectories")
 private List<String> importCompletedDirectories;
+
+public List<String> getImportCompletedDirectories() {
+    if (importCompletedDirectories == null || importCompletedDirectories.isEmpty()) {
+        return List.of("events/zenith-imported");
+    }
+
+    return importCompletedDirectories;
+}
 ```
 
-Удалить метод `getImportCompletedDirectories()`. Вместо него добавить следующие поля,
-методы и record внутрь класса `Events`:
+Заменить их на следующий полный фрагмент. Поместить его в `Events` рядом с остальными
+полями и методами:
 
 ```java
 @JsonProperty("ImportCompletedDestinations")
 private List<ImportCompletedDestination> importCompletedDestinations;
-
-@JsonProperty("CheckDirectory")
-private String checkDirectory;
 
 public List<ImportCompletedDestination> getImportCompletedDestinations() {
     if (importCompletedDestinations == null || importCompletedDestinations.isEmpty()) {
@@ -159,15 +144,43 @@ public record ImportCompletedDestination(
 }
 ```
 
-Остальные поля `Events` и метод `getRegistryUpdatedDirectory()` не менять.
+Старый `getCheckDirectory()` удалить, так как в приведённом фрагменте находится его
+новая полная версия. Поле `checkDirectory` оставить в классе: оно уже существует и
+нужно клиентам `CHECK_ONLY`.
 
-## 4. Публикация во все офисы без прерывания цикла
+## 3. Добавить объект результата публикации
 
-**Файл:**
+**Создать файл:**
+`zenith-processor/src/main/java/org/ikozmin/zenith/event/ZenithImportPublicationResult.java`.
+
+```java
+package org.ikozmin.zenith.event;
+
+import java.util.List;
+
+/** Хранит итог публикации служебного события по офисным очередям. */
+public record ZenithImportPublicationResult(
+        int destinationCount,
+        List<String> failedDestinationNames
+) {
+    public ZenithImportPublicationResult {
+        failedDestinationNames = List.copyOf(failedDestinationNames);
+    }
+
+    /** Возвращает true, когда событие не удалось записать хотя бы в одну папку офиса. */
+    public boolean hasFailures() {
+        return !failedDestinationNames.isEmpty();
+    }
+}
+```
+
+Список успешно обработанных офисов здесь не нужен: для уведомления важны только общее
+количество адресатов и названия офисов, в которых требуется ручной запуск проверки.
+
+## 4. Публиковать событие во все офисы
+
+**Файл, который заменить полностью:**
 `zenith-processor/src/main/java/org/ikozmin/zenith/event/ZenithImportEventPublisher.java`.
-
-Заменить класс полностью. Изменение ловит ошибку отдельно для каждого адресата,
-записывает её в лог и продолжает публикацию в следующие папки.
 
 ```java
 package org.ikozmin.zenith.event;
@@ -195,33 +208,31 @@ public final class ZenithImportEventPublisher {
     }
 
     /**
-     * Публикует событие во все настроенные офисные очереди.
-     * Ошибка одного адресата не отменяет публикацию для остальных адресатов.
+     * Публикует событие в каждую офисную очередь.
+     * Ошибка одного офиса фиксируется в журнале, но не отменяет другие публикации.
      */
     public ZenithImportPublicationResult publish(RegistryUpdatedEvent sourceEvent) {
+        LocalDateTime createdAt = LocalDateTime.now();
         ZenithImportCompletedEvent event = new ZenithImportCompletedEvent(
                 sourceEvent.eventId() + "-imported",
                 ZenithImportCompletedEvent.TYPE,
-                LocalDateTime.now(),
+                createdAt,
                 sourceEvent.eventId(),
                 sourceEvent.catalog(),
                 sourceEvent.idXml(),
                 sourceEvent.registryFile(),
-                LocalDateTime.now().toString()
+                createdAt.toString()
         );
 
-        List<String> publishedDestinations = new ArrayList<>();
-        List<String> failedDestinations = new ArrayList<>();
         List<ZenithConfig.Events.ImportCompletedDestination> destinations =
                 eventsConfig.getImportCompletedDestinations();
+        List<String> failedDestinationNames = new ArrayList<>();
 
         for (ZenithConfig.Events.ImportCompletedDestination destination : destinations) {
             try {
                 Path file = new FileEventPublisher(
                         Path.of(destination.directory()).resolve("new")
                 ).publish(event);
-
-                publishedDestinations.add(destination.name());
 
                 log.info(
                         "Zenith import completed event published. catalog={}, destination={}, file={}",
@@ -230,7 +241,7 @@ public final class ZenithImportEventPublisher {
                         file.toAbsolutePath()
                 );
             } catch (RuntimeException e) {
-                failedDestinations.add(destination.name());
+                failedDestinationNames.add(destination.name());
 
                 log.warn(
                         "Zenith import completed event was not published. catalog={}, destination={}, directory={}, error={}",
@@ -245,33 +256,43 @@ public final class ZenithImportEventPublisher {
 
         return new ZenithImportPublicationResult(
                 destinations.size(),
-                publishedDestinations,
-                failedDestinations
+                failedDestinationNames
         );
     }
 }
 ```
 
-После замены удалить файл:
+**Удалить файл:**
 
 ```text
 zenith-processor/src/main/java/org/ikozmin/zenith/event/ZenithImportEventPublicationException.java
 ```
 
-Он больше не нужен: ошибка публикации не является исключением workflow.
+Он больше не нужен: частичная ошибка публикации не должна быть исключением workflow.
 
-## 5. Формирование честного результата импорта
+## 5. Сформировать результат для уведомления
 
 **Файл:**
 `zenith-processor/src/main/java/org/ikozmin/zenith/service/ZenithWorkflowService.java`.
 
-В методе `processImportOnly(...)` заменить строку:
+### 5.1. Добавить import
+
+Добавить к существующим import:
+
+```java
+import org.ikozmin.zenith.event.ZenithImportPublicationResult;
+```
+
+### 5.2. Изменить `processImportOnly(...)`
+
+После существующей проверки `if (!imported) { ... }` удалить строку:
 
 ```java
 new ZenithImportEventPublisher(config.getEvents()).publish(event);
 ```
 
-и существующий `return new ZenithProcessingSummary(...)` на этот полный фрагмент:
+и заменить существующий `return new ZenithProcessingSummary(...)` следующим полным
+фрагментом:
 
 ```java
 ZenithImportPublicationResult publicationResult =
@@ -289,10 +310,52 @@ return new ZenithProcessingSummary(
 );
 ```
 
-В конец класса, перед последней `}`, добавить метод:
+### 5.3. Изменить `processFull(...)`
+
+Заменить строку:
 
 ```java
-/** Формирует понятный сотруднику итог импорта и публикации офисных событий. */
+new ZenithImportEventPublisher(config.getEvents()).publish(event);
+```
+
+на:
+
+```java
+ZenithImportPublicationResult publicationResult =
+        new ZenithImportEventPublisher(config.getEvents()).publish(event);
+```
+
+Найти в конце метода текущий фрагмент:
+
+```java
+log.info("Full Zenith workflow completed. eventId={}", event.eventId());
+
+return summary;
+```
+
+и заменить его полностью на:
+
+```java
+log.info("Full Zenith workflow completed. eventId={}", event.eventId());
+
+return new ZenithProcessingSummary(
+        summary.eventId(),
+        summary.processed(),
+        summary.reportFile(),
+        summary.totalPersons(),
+        summary.newPersons(),
+        summary.fesPackageRoot(),
+        summary.persons(),
+        summary.message() + System.lineSeparator() + buildImportMessage(publicationResult)
+);
+```
+
+### 5.4. Добавить метод `buildImportMessage(...)`
+
+В конец класса, перед последней `}`, добавить метод полностью:
+
+```java
+/** Формирует пользовательский итог загрузки реестра и публикации офисных событий. */
 private String buildImportMessage(ZenithImportPublicationResult publicationResult) {
     if (!publicationResult.hasFailures()) {
         return "Реестр успешно загружен в Zenith.";
@@ -328,61 +391,21 @@ private String buildImportMessage(ZenithImportPublicationResult publicationResul
 }
 ```
 
-Добавить импорт в начало файла:
-
-```java
-import org.ikozmin.zenith.event.ZenithImportPublicationResult;
-```
-
-В `processFull(...)` заменить единственную строку публикации:
-
-```java
-new ZenithImportEventPublisher(config.getEvents()).publish(event);
-```
-
-на:
-
-```java
-ZenithImportPublicationResult publicationResult =
-        new ZenithImportEventPublisher(config.getEvents()).publish(event);
-```
-
-После вызова `createReportIfEnabled(...)` и до `return summary;` заменить возврат на:
-
-```java
-return new ZenithProcessingSummary(
-        summary.eventId(),
-        summary.processed(),
-        summary.reportFile(),
-        summary.totalPersons(),
-        summary.newPersons(),
-        summary.fesPackageRoot(),
-        summary.persons(),
-        summary.message() + System.lineSeparator() + buildImportMessage(publicationResult)
-);
-```
-
-Так локальная проверка FULL не будет отменена из-за недоступной сетевой папки.
-
-## 6. Очередь и retention
+## 6. Убрать устаревшую обработку исключения
 
 **Файл:**
 `zenith-processor/src/main/java/org/ikozmin/zenith/ZenithProcessorMain.java`.
 
-Удалить импорт:
+### 6.1. Удалить import
 
 ```java
 import org.ikozmin.zenith.event.ZenithImportEventPublicationException;
 ```
 
-Удалить полностью методы:
+### 6.2. Упростить обработчик ошибок
 
-```java
-private ZenithProcessingSummary createRegistryFailureSummary(...)
-private ZenithImportEventPublicationException findImportEventPublicationFailure(...)
-```
-
-В блоке `catch` метода `processRegistryUpdatedEvent(...)` заменить создание summary:
+В `processRegistryUpdatedEvent(...)` в блоке `catch (Exception e)` заменить только
+создание `failureSummary`:
 
 ```java
 ZenithProcessingSummary failureSummary = createRegistryFailureSummary(
@@ -402,10 +425,20 @@ ZenithProcessingSummary failureSummary = createFailureSummary(
 );
 ```
 
-Другой код `catch` не менять. После изменения сюда будут попадать только реальные
-ошибки импорта/проверки Zenith, а не частичный результат публикации событий.
+Затем удалить методы полностью:
 
-В `applyEventRetention(...)` заменить цикл:
+```java
+private ZenithProcessingSummary createRegistryFailureSummary(...)
+private ZenithImportEventPublicationException findImportEventPublicationFailure(...)
+```
+
+Остальной блок `catch` не менять. Теперь в него попадают только фактические ошибки
+импорта или проверки Zenith. Частичная ошибка записи офисного события обработана внутри
+publisher и до `catch` не доходит.
+
+### 6.3. Сохранить retention для офисных очередей
+
+В `applyEventRetention(...)` заменить старый цикл:
 
 ```java
 for (String directory : config.getEvents().getImportCompletedDirectories()) {
@@ -422,11 +455,21 @@ for (ZenithConfig.Events.ImportCompletedDestination destination
 }
 ```
 
+Это не меняет retention: он продолжит обрабатывать те же офисные папки, но путь теперь
+берётся из объекта `Name + Directory`.
+
 ## 7. Уведомления
 
-`ZenithNotificationTextBuilder` менять не нужно. Для `IMPORT_ONLY` он уже выводит
-`summary.message()`. После изменения workflow письмо при частичной доставке будет
-выглядеть так:
+`ZenithNotificationTextBuilder` менять не нужно. Для режима `IMPORT_ONLY` он уже
+выводит `summary.message()`.
+
+При полном успехе пользователь получит только:
+
+```text
+Реестр успешно загружен в Zenith.
+```
+
+При недоступности НЧ из четырёх настроенных офисов:
 
 ```text
 Реестр успешно загружен в Zenith.
@@ -438,21 +481,22 @@ for (ZenithConfig.Events.ImportCompletedDestination destination
 Техническая информация зарегистрирована в журнале программы.
 ```
 
-При полной доставке пользователь увидит только: `Реестр успешно загружен в Zenith.`
-Сообщение о частичной доставке не утверждает, что импорт не состоялся, не содержит
-технических путей и не обещает повторной отправки, которой в текущем сценарии нет.
+## 8. Проверка результата
 
-## 8. Проверка
-
-1. Временно запретить запись только в папку НЧ.
-2. Поместить один `RegistryUpdatedEvent` в центральную очередь и запустить
+1. Временно запретить центральному экземпляру запись только в папку НЧ.
+2. Поместить одно новое событие `RegistryUpdatedEvent` в очередь и выполнить
    `IMPORT_ONLY --drain`.
-3. Проверить журнал: импорт XML в Zenith успешен; созданы JSON для центрального
-   сервера, АЛМ и ИЖ; для НЧ есть `WARN`, но нет `ERROR Zenith registry event failed`.
-4. Проверить очередь исходного события: оно перенесено в `processed`, не в `failed` и
-   не в `retry`.
-5. Проверить письмо: в нём сказано об успешной загрузке и о недоставке события в НЧ.
-6. Проверить локальный `CHECK_ONLY`: он продолжает штатно обрабатывать созданное
-   локальное событие.
-7. Отдельно вызвать реальную ошибку API Zenith до завершения импорта. В этом случае
-   исходное событие должно сохранить прежнее поведение `retry` или `failed`.
+3. Проверить журнал:
+   * импорт XML в Zenith завершён успешно;
+   * события созданы для доступных офисов;
+   * по НЧ есть `WARN` с технической причиной;
+   * нет сообщения `Zenith registry event failed`.
+4. Проверить очередь: исходный `RegistryUpdatedEvent` находится в `processed`, а не в
+   `retry` или `failed`.
+5. Проверить письмо: текст соответствует примеру из раздела 7, без UNC-пути и
+   stacktrace.
+6. Убедиться, что клиентские `CHECK_ONLY` для доступных офисов выполняют проверку как
+   раньше.
+7. Отдельно проверить реальный сбой API Zenith до окончания импорта. Тогда событие
+   должно по-прежнему попадать в `retry` или `failed`: это настоящее исключение
+   workflow, которое данная доработка не маскирует.
