@@ -37,12 +37,25 @@ public final class ZenithImportEventPublisher {
         List<Path> publishedFiles = new ArrayList<>();
 
         for (String directory : eventsConfig.getImportCompletedDirectories()) {
-            Path file = new FileEventPublisher(Path.of(directory).resolve("new")).publish(event);
-            publishedFiles.add(file);
+            try {
+                Path file = new FileEventPublisher(
+                        Path.of(directory).resolve("new")
+                ).publish(event);
 
-            log.info("Zenith import completed event published. catalog={}, file={}",
-                    event.catalog(),
-                    file.toAbsolutePath());
+                publishedFiles.add(file);
+
+                log.info(
+                        "Zenith import completed event published. catalog={}, file={}",
+                        event.catalog(),
+                        file.toAbsolutePath()
+                );
+            } catch (RuntimeException e) {
+                throw new ZenithImportEventPublicationException(
+                        directory,
+                        publishedFiles,
+                        e
+                );
+            }
         }
 
         return publishedFiles;

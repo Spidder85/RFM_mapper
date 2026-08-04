@@ -10,3 +10,76 @@ TODO для модуля zenith-processor
 
 2026.07.17
 [x] ныжно выделить вы конфиге отдельный список получателей уведомления по почте для режима IMPORT_ONLY, т.к. при импортировании должны уведомляться все офисы, а при проверке тольки лица конкретного офиса. Эти поля должны бытьне обязательными (если их нет то берет из основного списка (если он есть))
+
+2026.08.04
+[] при попытки обработать вчера (2026.08.03 17:11) реестр, а точнее после загрузки осуществляется создание событий впапках, в одну папку событие не удалось создать и в итоге в почту ушло уведомление что не уддалось загрзить реестр в зенит, хотя по факту не удалось создать папку для конкрентогоофиса, а реестр успешно был загружен и потом обработан массовой проверкой. Необходимо разделить уведомления о ошибочных состояних чтобы не вводить пользователя в заблужение. Набросал решение. Возможно не правильное, возможно можно улучшить, изменить тект на более правильный для простых польователей.
+фрагмент настроек:
+    "Events": {
+        "RegistryUpdatedDirectory": "events/registry-updated",
+        "ImportCompletedDirectories": [
+            "events/zenith-imported/client-main",
+            "\\\\P-LKM\\zenit\\z-finmon\\alm\\events",
+            "\\\\P-LKM\\zenit\\z-finmon\\izh\\events",
+            "\\\\P-LKM\\zenit\\z-finmon\\nch\\events"
+        ],
+        "CheckDirectory": "events/zenith-imported/client-main"
+    },
+Лог ошибки:
+    2026-08-03 17:10:22 INFO  - RegistryUpdated queue prepared. requeuedRetries=0, deletedObsolete=0
+    2026-08-03 17:10:23 INFO  - Processing Zenith import only. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45, catalog=te21, file=\\t-cent\Zen-co\terrlist\терр_экстр\260803\03.08.2026-v 2.2.xml
+    2026-08-03 17:10:23 INFO  - Starting the import of the registry list into Zenith. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45, catalog=te21, fileFormat=TerroristsXml, listCategory=<not required>, file=\\t-cent\Zen-co\terrlist\терр_экстр\260803\03.08.2026-v 2.2.xml
+    2026-08-03 17:11:25 INFO  - Registry list imported into Zenith. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45, catalog=te21, fileFormat=TerroristsXml, listCategory=<not required>, file=\\t-cent\Zen-co\terrlist\терр_экстр\260803\03.08.2026-v 2.2.xml
+    2026-08-03 17:11:25 INFO  - Zenith import completed event published. catalog=te21, file=C:\script\RFM_Zenith_run\events\zenith-imported\client-main\new\2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-imported.json
+    2026-08-03 17:11:25 INFO  - Zenith import completed event published. catalog=te21, file=\\P-LKM\zenit\z-finmon\alm\events\new\2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-imported.json
+    2026-08-03 17:11:25 INFO  - Zenith import completed event published. catalog=te21, file=\\P-LKM\zenit\z-finmon\izh\events\new\2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-imported.json
+    2026-08-03 17:11:25 ERROR - Zenith registry event failed. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45, catalog=te21, retryable=false, error=Failed to publish event
+    java.lang.IllegalStateException: Failed to publish event
+        at org.ikozmin.common.event.FileEventPublisher.publish(FileEventPublisher.java:45)
+        at org.ikozmin.common.event.FileEventPublisher.publish(FileEventPublisher.java:27)
+        at org.ikozmin.zenith.event.ZenithImportEventPublisher.publish(ZenithImportEventPublisher.java:40)
+        at org.ikozmin.zenith.service.ZenithWorkflowService.processImportOnly(ZenithWorkflowService.java:85)
+        at org.ikozmin.zenith.ZenithProcessorMain.processRegistryUpdatedEvent(ZenithProcessorMain.java:219)
+        at org.ikozmin.zenith.ZenithProcessorMain.processOnce(ZenithProcessorMain.java:185)
+        at org.ikozmin.zenith.ZenithProcessorMain.processDrain(ZenithProcessorMain.java:136)
+        at org.ikozmin.zenith.ZenithProcessorMain.call(ZenithProcessorMain.java:90)
+        at org.ikozmin.zenith.ZenithProcessorMain.call(ZenithProcessorMain.java:33)
+        at picocli.CommandLine.executeUserObject(CommandLine.java:2045)
+        at picocli.CommandLine.access$1500(CommandLine.java:148)
+        at picocli.CommandLine$RunLast.executeUserObjectOfLastSubcommandWithSameParent(CommandLine.java:2465)
+        at picocli.CommandLine$RunLast.handle(CommandLine.java:2457)
+        at picocli.CommandLine$RunLast.handle(CommandLine.java:2419)
+        at picocli.CommandLine$AbstractParseResultHandler.execute(CommandLine.java:2277)
+        at picocli.CommandLine$RunLast.execute(CommandLine.java:2421)
+        at picocli.CommandLine.execute(CommandLine.java:2174)
+        at org.ikozmin.zenith.ZenithProcessorMain.main(ZenithProcessorMain.java:71)
+    Caused by: java.nio.file.AccessDeniedException: \\P-LKM\zenit\z-finmon\nch\events
+        at java.base/sun.nio.fs.WindowsException.translateToIOException(WindowsException.java:89)
+        at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:103)
+        at java.base/sun.nio.fs.WindowsException.rethrowAsIOException(WindowsException.java:108)
+        at java.base/sun.nio.fs.WindowsFileSystemProvider.createDirectory(WindowsFileSystemProvider.java:527)
+        at java.base/java.nio.file.Files.createDirectory(Files.java:699)
+        at java.base/java.nio.file.Files.createAndCheckIsDirectory(Files.java:807)
+        at java.base/java.nio.file.Files.createDirectories(Files.java:793)
+        at org.ikozmin.common.event.FileEventPublisher.publish(FileEventPublisher.java:32)
+        ... 17 common frames omitted
+    2026-08-03 17:11:25 INFO  - Zenith summary saved: C:\script\RFM_Zenith_run\events\registry-updated\results\2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-zenith-summary.json
+    2026-08-03 17:11:25 INFO  - No events found
+    2026-08-03 17:11:25 INFO  - Zenith drain completed. processedEvents=0, failedEvents=1
+    2026-08-03 17:11:27 INFO  - Email notification sent. purpose=IMPORT, recipients=7
+    2026-08-03 17:11:27 INFO  - Notification dispatch completed. purpose=IMPORT, enabledSenders=1
+    2026-08-03 17:11:35 INFO  - ZenithImportCompleted queue prepared. requeuedRetries=0, deletedObsolete=0
+    2026-08-03 17:11:36 INFO  - Processing Zenith check only. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-imported, sourceEventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45, catalog=te21
+    2026-08-03 17:11:36 INFO  - Zenith AML/CFT mass check started. catalog=te21, periodic=false
+    2026-08-03 17:12:15 INFO  - Zenith AML/CFT mass check finished. catalog=te21, periodic=false
+    2026-08-03 17:12:15 INFO  - Loading Zenith report filter: C:\script\RFM_Zenith_run\config\zenith\podft-report-filter-te21.xml
+    2026-08-03 17:12:15 INFO  - Creating Zenith report. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45, catalog=te21, outDocType=10217, beginDate=2026-07-30, endDate=2026-08-03, filterEnabled=true
+    2026-08-03 17:12:16 INFO  - Downloading Zenith report. catalog=te21, outDocId=905211, targetFile=\\t-cent\Zen-co\terrlist\ПОД_ФТ_журналы проверок\T38_26_07_30-26_08_03_терр.xlsx
+    2026-08-03 17:12:17 INFO  - Zenith report downloaded. catalog=te21, outDocId=905211, file=\\t-cent\Zen-co\terrlist\ПОД_ФТ_журналы проверок\T38_26_07_30-26_08_03_терр.xlsx
+    2026-08-03 17:12:19 INFO  - Zenith report analyzed. file=\\t-cent\Zen-co\terrlist\ПОД_ФТ_журналы проверок\T38_26_07_30-26_08_03_терр.xlsx, persons=1
+    2026-08-03 17:12:19 INFO  - Zenith report contains known persons only. catalog=te21, totalPersons=1
+    2026-08-03 17:12:19 INFO  - Zenith check workflow completed. eventId=2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-imported
+    2026-08-03 17:12:19 INFO  - Zenith summary saved: C:\script\RFM_Zenith_run\events\registry-updated\results\2026-08-03T170054480814800-te21-a3909d99-6187-458b-bf35-95ff8d37ff45-zenith-summary.json
+    2026-08-03 17:12:19 INFO  - No events found
+    2026-08-03 17:12:19 INFO  - Zenith drain completed. processedEvents=1, failedEvents=0
+    2026-08-03 17:12:21 INFO  - Email notification sent. purpose=CHECK, recipients=3
+    2026-08-03 17:12:21 INFO  - Notification dispatch completed. purpose=CHECK, enabledSenders=1

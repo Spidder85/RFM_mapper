@@ -106,22 +106,16 @@ public final class ZenithNotificationTextBuilder {
     /**
      * Добавляет понятный сотруднику итог импорта одного реестра.
      */
-    private void appendImportResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+    private void appendImportResultBlock(
+            StringBuilder body,
+            String indent,
+            ZenithProcessingSummary summary
+    ) {
         String lineSeparator = System.lineSeparator();
 
         if (summary == null) {
             body.append(indent)
                     .append("Результат загрузки в Zenith недоступен. Проверьте журнал Zenith.")
-                    .append(lineSeparator);
-            return;
-        }
-
-        if (!summary.processed()) {
-            body.append(indent)
-                    .append("Не удалось загрузить реестр в Zenith.")
-                    .append(lineSeparator);
-            body.append(indent)
-                    .append("Подробности доступны в журнале Zenith.")
                     .append(lineSeparator);
             return;
         }
