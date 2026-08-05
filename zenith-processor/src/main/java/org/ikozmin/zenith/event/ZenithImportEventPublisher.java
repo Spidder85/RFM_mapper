@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Публикует события для офисных Zenith после успешного центрального импорта реестра. */
+/** Публикует офисные события после успешного центрального импорта реестра. */
 public final class ZenithImportEventPublisher {
     private static final Logger log = LoggerFactory.getLogger(ZenithImportEventPublisher.class);
 
@@ -22,42 +22,56 @@ public final class ZenithImportEventPublisher {
         this.eventsConfig = eventsConfig;
     }
 
-    public List<Path> publish(RegistryUpdatedEvent sourceEvent) {
+    /**
+     * Публикует событие в каждую офисную очередь.
+     * Ошибка одного офиса фиксируется в журнале, но не отменяет другие публикации.
+     */
+    public ZenithImportPublicationResult publish(RegistryUpdatedEvent sourceEvent) {
+        LocalDateTime createdAt = LocalDateTime.now();
         ZenithImportCompletedEvent event = new ZenithImportCompletedEvent(
                 sourceEvent.eventId() + "-imported",
                 ZenithImportCompletedEvent.TYPE,
-                LocalDateTime.now(),
+                createdAt,
                 sourceEvent.eventId(),
                 sourceEvent.catalog(),
                 sourceEvent.idXml(),
                 sourceEvent.registryFile(),
-                LocalDateTime.now().toString()
+                createdAt.toString()
         );
 
-        List<Path> publishedFiles = new ArrayList<>();
+        List<ZenithConfig.Events.ImportCompletedDestination> destinations =
+                eventsConfig.getImportCompletedDestinations();
+        List<String> failedDestinationNames = new ArrayList<>();
 
-        for (String directory : eventsConfig.getImportCompletedDirectories()) {
+        for (ZenithConfig.Events.ImportCompletedDestination destination : destinations) {
             try {
                 Path file = new FileEventPublisher(
-                        Path.of(directory).resolve("new")
+                        Path.of(destination.directory()).resolve("new")
                 ).publish(event);
 
-                publishedFiles.add(file);
-
                 log.info(
-                        "Zenith import completed event published. catalog={}, file={}",
+                        "Zenith import completed event published. catalog={}, destination={}, file={}",
                         event.catalog(),
+                        destination.name(),
                         file.toAbsolutePath()
                 );
             } catch (RuntimeException e) {
-                throw new ZenithImportEventPublicationException(
-                        directory,
-                        publishedFiles,
+                failedDestinationNames.add(destination.name());
+
+                log.warn(
+                        "Zenith import completed event was not published. catalog={}, destination={}, directory={}, error={}",
+                        event.catalog(),
+                        destination.name(),
+                        destination.directory(),
+                        e.getMessage(),
                         e
                 );
             }
         }
 
-        return publishedFiles;
+        return new ZenithImportPublicationResult(
+                destinations.size(),
+                failedDestinationNames
+        );
     }
 }

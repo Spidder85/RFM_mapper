@@ -6,7 +6,6 @@ import org.ikozmin.common.event.ZenithImportCompletedEventConsumer;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.common.notification.*;
 import org.ikozmin.zenith.client.ZenithApiException;
-import org.ikozmin.zenith.event.ZenithImportEventPublicationException;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.config.ZenithWorkflowMode;
@@ -240,11 +239,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
                     e.getMessage(),
                     e);
 
-            ZenithProcessingSummary failureSummary = createRegistryFailureSummary(
+            ZenithProcessingSummary failureSummary = createFailureSummary(
                     claimedEvent.get().event().eventId(),
-                    retryable,
-                    e,
-                    workflowMode
+                    retryable
             );
             saveSummary(config, failureSummary);
             notificationItems.add(new ZenithNotificationItem(
@@ -405,66 +402,6 @@ public final class ZenithProcessorMain implements Callable<Integer> {
     }
 
     /**
-     * Создает результат ошибки обработки входного события.
-     *
-     * Если импорт в Zenith уже завершился и ошибка произошла при публикации
-     * офисного события, формирует отдельное сообщение о частичном успехе.
-     */
-    private ZenithProcessingSummary createRegistryFailureSummary(
-            String eventId,
-            boolean retryable,
-            Exception exception,
-            ZenithWorkflowMode workflowMode
-    ) {
-        ZenithImportEventPublicationException publicationFailure =
-                findImportEventPublicationFailure(exception);
-
-        if (publicationFailure != null) {
-            String message =
-                    "Реестр успешно загружен в Zenith, но не удалось доставить "
-                            + "событие для запуска офисной проверки. "
-                            + "Успешно опубликовано адресатов: "
-                            + publicationFailure.publishedFiles().size()
-                            + ". Каталог назначения, в котором произошла ошибка: "
-                            + publicationFailure.failedDirectory()
-                            + ". Подробности доступны в журнале Zenith.";
-
-            return ZenithProcessingSummary.failed(eventId, message);
-        }
-
-        if (workflowMode == ZenithWorkflowMode.IMPORT_ONLY) {
-            String message = retryable
-                    ? "Не удалось загрузить реестр в Zenith: Zenith временно "
-                    + "недоступен. Повторная попытка будет выполнена автоматически."
-                    : "Не удалось загрузить реестр в Zenith. "
-                    + "Подробности доступны в журнале Zenith.";
-
-            return ZenithProcessingSummary.failed(eventId, message);
-        }
-
-        return createFailureSummary(eventId, retryable);
-    }
-
-    /**
-     * Ищет ошибку публикации события во всей цепочке причин исключения.
-     */
-    private ZenithImportEventPublicationException findImportEventPublicationFailure(
-            Throwable exception
-    ) {
-        Throwable current = exception;
-
-        while (current != null) {
-            if (current instanceof ZenithImportEventPublicationException publicationFailure) {
-                return publicationFailure;
-            }
-
-            current = current.getCause();
-        }
-
-        return null;
-    }
-
-    /**
      * Создает безопасный для сотрудника summary ошибки без передачи технического текста API в уведомление.
      */
     private ZenithProcessingSummary createFailureSummary(String eventId, boolean retryable) {
@@ -516,8 +453,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
         retentionService.apply(Path.of(config.getEvents().getRegistryUpdatedDirectory()));
 
-        for (String directory : config.getEvents().getImportCompletedDirectories()) {
-            retentionService.apply(Path.of(directory));
+        for (ZenithConfig.Events.ImportCompletedDestination destination
+                : config.getEvents().getImportCompletedDestinations()) {
+            retentionService.apply(Path.of(destination.directory()));
         }
 
         String checkDirectory = config.getEvents().getCheckDirectory();

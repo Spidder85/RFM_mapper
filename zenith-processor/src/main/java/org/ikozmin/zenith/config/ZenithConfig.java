@@ -60,11 +60,22 @@ public final class ZenithConfig {
         @JsonProperty("RegistryUpdatedDirectory")
         private String registryUpdatedDirectory;
 
-        @JsonProperty("ImportCompletedDirectories")
-        private List<String> importCompletedDirectories;
-
         @JsonProperty("CheckDirectory")
         private String checkDirectory;
+
+        @JsonProperty("ImportCompletedDestinations")
+        private List<ImportCompletedDestination> importCompletedDestinations;
+
+        public List<ImportCompletedDestination> getImportCompletedDestinations() {
+            if (importCompletedDestinations == null || importCompletedDestinations.isEmpty()) {
+                return List.of(new ImportCompletedDestination(
+                        "Локальный сервер проверки",
+                        "events/zenith-imported"
+                ));
+            }
+
+            return importCompletedDestinations;
+        }
 
         public String getRegistryUpdatedDirectory() {
             if (registryUpdatedDirectory != null && !registryUpdatedDirectory.isBlank()) {
@@ -76,24 +87,31 @@ public final class ZenithConfig {
                     : directory;
         }
 
-        public List<String> getImportCompletedDirectories() {
-            if (importCompletedDirectories == null || importCompletedDirectories.isEmpty()) {
-                return List.of("events/zenith-imported");
-            }
-
-            return importCompletedDirectories;
-        }
-
         public String getCheckDirectory() {
             if (checkDirectory != null && !checkDirectory.isBlank()) {
                 return checkDirectory;
             }
 
-            return getImportCompletedDirectories().get(0);
+            return getImportCompletedDestinations().getFirst().directory();
         }
 
         public String getDirectory() {
             return getRegistryUpdatedDirectory();
+        }
+
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        public record ImportCompletedDestination(
+                @JsonProperty("Name") String name,
+                @JsonProperty("Directory") String directory
+        ) {
+            public ImportCompletedDestination {
+                if (name == null || name.isBlank()) {
+                    throw new IllegalArgumentException("Import destination name is blank");
+                }
+                if (directory == null || directory.isBlank()) {
+                    throw new IllegalArgumentException("Import destination directory is blank");
+                }
+            }
         }
     }
 
