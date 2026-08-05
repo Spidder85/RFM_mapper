@@ -5,13 +5,13 @@ import org.ikozmin.common.event.ProcessingSummaryStore;
 import org.ikozmin.common.event.ZenithImportCompletedEventConsumer;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.common.notification.*;
+import org.ikozmin.zenith.client.ZenithApiException;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.config.ZenithConfigLoader;
 import org.ikozmin.zenith.config.ZenithWorkflowMode;
 import org.ikozmin.zenith.service.ZenithWorkflowService;
 import org.ikozmin.common.event.EventRetentionService;
 import org.ikozmin.common.event.EventQueueCompactor;
-import org.ikozmin.zenith.client.ZenithApiException;
 
 import java.net.ConnectException;
 import java.net.http.HttpTimeoutException;
@@ -453,8 +453,9 @@ public final class ZenithProcessorMain implements Callable<Integer> {
 
         retentionService.apply(Path.of(config.getEvents().getRegistryUpdatedDirectory()));
 
-        for (String directory : config.getEvents().getImportCompletedDirectories()) {
-            retentionService.apply(Path.of(directory));
+        for (ZenithConfig.Events.ImportCompletedDestination destination
+                : config.getEvents().getImportCompletedDestinations()) {
+            retentionService.apply(Path.of(destination.directory()));
         }
 
         String checkDirectory = config.getEvents().getCheckDirectory();

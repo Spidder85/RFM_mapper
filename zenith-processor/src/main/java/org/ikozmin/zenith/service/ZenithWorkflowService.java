@@ -6,6 +6,7 @@ import org.ikozmin.common.event.ZenithProcessingSummary;
 import org.ikozmin.zenith.client.ZenithApiClient;
 import org.ikozmin.zenith.config.ZenithConfig;
 import org.ikozmin.zenith.event.ZenithImportEventPublisher;
+import org.ikozmin.zenith.event.ZenithImportPublicationResult;
 import org.ikozmin.zenith.fes.FesPackage;
 import org.ikozmin.zenith.fes.FesPackageService;
 import org.ikozmin.zenith.person.FoundPersonsStore;
@@ -51,7 +52,8 @@ public final class ZenithWorkflowService {
             );
         }
 
-        new ZenithImportEventPublisher(config.getEvents()).publish(event);
+        ZenithImportPublicationResult publicationResult =
+                new ZenithImportEventPublisher(config.getEvents()).publish(event);
         runMassCheckIfEnabled(event.catalog());
 
         ZenithProcessingSummary summary = createReportIfEnabled(
@@ -62,7 +64,16 @@ public final class ZenithWorkflowService {
 
         log.info("Full Zenith workflow completed. eventId={}", event.eventId());
 
-        return summary;
+        return new ZenithProcessingSummary(
+                summary.eventId(),
+                summary.processed(),
+                summary.reportFile(),
+                summary.totalPersons(),
+                summary.newPersons(),
+                summary.fesPackageRoot(),
+                summary.persons(),
+                summary.message() + System.lineSeparator() + buildImportMessage(publicationResult)
+        );
     }
 
     /** Импортирует реестр и сообщает офисам, что можно запускать проверку. */
@@ -82,7 +93,8 @@ public final class ZenithWorkflowService {
             );
         }
 
-        new ZenithImportEventPublisher(config.getEvents()).publish(event);
+        ZenithImportPublicationResult publicationResult =
+                new ZenithImportEventPublisher(config.getEvents()).publish(event);
 
         return new ZenithProcessingSummary(
                 event.eventId(),
@@ -92,7 +104,7 @@ public final class ZenithWorkflowService {
                 0,
                 null,
                 List.of(),
-                "Реестр успешно загружен в Zenith."
+                buildImportMessage(publicationResult)
         );
     }
 
@@ -266,5 +278,40 @@ public final class ZenithWorkflowService {
                 summaryPersons,
                 "Найдены новые лица. Перечень: " + catalog + ", количество: " + newPersons.size()
         );
+    }
+
+    /** Формирует пользовательский итог загрузки реестра и публикации офисных событий. */
+    private String buildImportMessage(ZenithImportPublicationResult publicationResult) {
+        if (!publicationResult.hasFailures()) {
+            return "Реестр успешно загружен в Zenith.";
+        }
+
+        StringBuilder message = new StringBuilder();
+        message.append("Реестр успешно загружен в Zenith.")
+                .append(System.lineSeparator())
+                .append(System.lineSeparator())
+                .append("Не удалось передать служебное событие для автоматического запуска ")
+                .append("проверки в ")
+                .append(publicationResult.failedDestinationNames().size())
+                .append(" из ")
+                .append(publicationResult.destinationCount())
+                .append(" офисов:")
+                .append(System.lineSeparator());
+
+        for (int index = 0; index < publicationResult.failedDestinationNames().size(); index++) {
+            message.append(index + 1)
+                    .append(") ")
+                    .append(publicationResult.failedDestinationNames().get(index))
+                    .append(System.lineSeparator());
+        }
+
+        message.append(System.lineSeparator())
+                .append(publicationResult.failedDestinationNames().size() == 1
+                        ? "В указанном офисе необходимо выполнить проверку вручную."
+                        : "В указанных офисах необходимо выполнить проверку вручную.")
+                .append(System.lineSeparator())
+                .append("Техническая информация зарегистрирована в журнале программы.");
+
+        return message.toString();
     }
 }

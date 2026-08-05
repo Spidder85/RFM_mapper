@@ -3,6 +3,8 @@ package org.ikozmin.common.notification;
 import org.ikozmin.common.event.ZenithProcessingSummary;
 
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -27,6 +29,11 @@ public final class ZenithNotificationTextBuilder {
         body.append(lineSeparator);
         body.append("В Zenith завершена загрузка обновленных перечней Росфинмониторинга.")
                 .append(lineSeparator);
+        body.append(items.size() == 1 ?
+                "Перечень актуален " : "Перечни актуальны ")
+                .append("по состоянию на: ")
+                .append(LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")))
+                .append(lineSeparator).append(lineSeparator);
         body.append("Обработано перечней: ")
                 .append(items.size())
                 .append(lineSeparator);
@@ -99,22 +106,16 @@ public final class ZenithNotificationTextBuilder {
     /**
      * Добавляет понятный сотруднику итог импорта одного реестра.
      */
-    private void appendImportResultBlock(StringBuilder body, String indent, ZenithProcessingSummary summary) {
+    private void appendImportResultBlock(
+            StringBuilder body,
+            String indent,
+            ZenithProcessingSummary summary
+    ) {
         String lineSeparator = System.lineSeparator();
 
         if (summary == null) {
             body.append(indent)
                     .append("Результат загрузки в Zenith недоступен. Проверьте журнал Zenith.")
-                    .append(lineSeparator);
-            return;
-        }
-
-        if (!summary.processed()) {
-            body.append(indent)
-                    .append("Не удалось загрузить реестр в Zenith.")
-                    .append(lineSeparator);
-            body.append(indent)
-                    .append("Подробности доступны в журнале Zenith.")
                     .append(lineSeparator);
             return;
         }

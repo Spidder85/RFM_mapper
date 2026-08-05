@@ -1,12 +1,23 @@
 {
   "Events": {
     "RegistryUpdatedDirectory": "events/registry-updated",
-    "ImportCompletedDirectories": [
-      "events/zenith-imported/client-main",
-      "\\\\office1-server\\rfm-events\\zenith-check",
-      "\\\\office2-server\\rfm-events\\zenith-check",
-      "\\\\office3-server\\rfm-events\\zenith-check",
-      "\\\\office4-server\\rfm-events\\zenith-check"
+    "ImportCompletedDestinations":  [
+      {
+        "Name": "Центральный сервер проверки",
+        "Directory": "events/zenith-imported/client-main"
+      },
+      {
+        "Name": "Офис 1",
+        "Directory": "\\\\office1-server\\rfm-events\\zenith-check"
+      },
+      {
+        "Name": "Офис 2",
+        "Directory": "\\\\office2-server\\rfm-events\\zenith-check"
+      },
+      {
+        "Name": "Офис 3",
+        "Directory": "\\\\office3-server\\rfm-events\\zenith-check"
+      }
     ],
     "CheckDirectory": "events/zenith-imported/client-main"
   },
