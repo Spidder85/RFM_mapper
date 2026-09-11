@@ -141,7 +141,7 @@ public final class RegistryUpdateService {
                 folderName = catalogType.getCode();
             }
             Path catalogDir = downloadDir.resolve(folderName);
-            Path dateDir = catalogDir.resolve(resolveDateFolder(catalogInfo));
+            Path dateDir = catalogDir.resolve(resolveDatePath(catalogInfo));
             Files.createDirectories(dateDir);
 
             Path finalFile = dateDir.resolve(buildFileName(catalogType, catalogInfo));
@@ -170,7 +170,7 @@ public final class RegistryUpdateService {
     }
 
     /** Формирует безопасное имя папки даты из метаданных реестра. */
-    private String resolveDateFolder(CatalogInfo catalogInfo) {
+    private Path resolveDatePath(CatalogInfo catalogInfo) {
         String date = catalogInfo.effectiveDate();
 
         if (date == null || date.trim().isEmpty()) {
@@ -179,7 +179,17 @@ public final class RegistryUpdateService {
         }
 
         String safeDate = date.replaceAll("[^0-9A-Za-z]+", "");
-        return safeDate.length() >= 8 ? safeDate.substring(2, 8) : safeDate;
+
+        if (safeDate.length() < 8) {
+            throw new IllegalStateException("Invalid registry date: " + date);
+        }
+
+        return Path.of(
+                safeDate.substring(0, 4),   // Год
+                safeDate.substring(4, 6),   // Месяц
+                safeDate.substring(6, 8)    // День
+        );
+        // safeDate.length() >= 8 ? safeDate.substring(2, 8) : safeDate;
     }
 
     /** Извлекает единственный XML из ZIP и защищает от небезопасных путей архива. */
