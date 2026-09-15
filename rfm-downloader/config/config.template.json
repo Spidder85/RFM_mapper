@@ -1,0 +1,80 @@
+{
+  "Credentials": {
+    "UserName": "YOUR_RFM_USERNAME",
+    "Password": "YOUR_RFM_PASSWORD"
+  },
+  "Certificate": {
+    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
+    "UseCryptoPro": true,
+    "CryptoPro": {
+      "ProviderClasses": [
+        "ru.CryptoPro.JCP.JCP",
+        "ru.CryptoPro.Crypto.CryptoProvider",
+        "ru.CryptoPro.ssl.Provider"
+      ],
+      "KeyStoreProvider": "JCP",
+      "KeyStoreType": "HDImageStore",
+      "KeyPasswordEnv": "RFM_KEY_PASSWORD",
+      "SslProtocol": "GostTLSv1.2",
+      "SslProvider": "JTLS",
+      "KeyManagerAlgorithm": "GostX509",
+      "KeyManagerProvider": "JTLS"
+    }
+  },
+  "DefaultCatalog": "te21",
+  "Catalogs": [
+    "te21",
+    "un",
+    "mvk"
+  ],
+  "UseTestContour": false,
+  "OutputDirectory": {
+    "Path": "\\\\t-cent\\Zen-co\\terrlist\\test\\",
+    "Catalogs": {
+      "te21": "терр_экстр",
+      "un": "Санкционные_списки_ООН",
+      "mvk": "Перечни_решМКО(МВК)"
+    }
+  },
+  "Retention": {
+    "Enabled": true,
+    "KeepAuditDays": 60,
+    "KeepDownloadedVersions": 0
+  },
+  "Notifications": {
+    "Enabled": false,
+    "Email": {
+      "Enabled": false,
+      "SmtpHost": "smtp.your-company.ru",
+      "SmtpPort": 25,
+      "SmtpUsername": "",
+      "SmtpPassword": "",
+      "UseTls": false,
+      "From": "noreply@your-company.ru",
+      "To": [
+        "admin@your-company.ru"
+      ],
+      "Subject": "Обновлен перечень Росфинмониторинга",
+      "IncludeAttachment": false,
+      "IncludeFileChecksum": true
+    },
+    "Telegram": {
+      "Enabled": false,
+      "Token": "YOUR_TELEGRAM_BOT_TOKEN",
+      "ChatIds": [
+        "YOUR_TELEGRAM_CHAT_ID"
+      ],
+      "ApiIp": "149.154.167.220",
+      "IncludeFileChecksum": true
+    }
+  },
+  "Events": {
+    "Directory": "events/registry-updated"
+  },
+  "ZenithTrigger": {
+    "Enabled": true,
+    "Command": "run-zenith-drain.bat --mode FULL",
+    "WorkingDirectory": ".",
+    "TimeoutSeconds": 1800
+  }
+}

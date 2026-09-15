@@ -182,10 +182,18 @@ __screenshots__/
 
 .gigacode/
 
-config.json
+*.iml
+*.json
+!*.template.json
 *.cer
 *.pfx
 *.p12
+# папка логов
 logs/
+# папка загрузок
 downloads/
 target/
+# пакпка событий
+events/
+/data/
+/config/

@@ -1,323 +1,221 @@
-# RFM Client
+# RFM Automation
 
-Java client for the Rosfinmonitoring Service Concentrator API.
+RFM Automation is a Java 21 command-line system for receiving Rosfinmonitoring registry updates, processing them in Zenith, preparing draft FES packages, and delivering operational notifications.
 
-The application authenticates through the API, checks whether a registry has a
-new `idXml`, downloads the registry file when it changed, validates the file,
-stores local state, and writes audit envelopes needed for access requests.
+It is designed for unattended Windows Task Scheduler runs, normally once per hour. The system does not automatically send FES to Rosfinmonitoring: an employee reviews the draft and makes the final decision.
 
-## Supported Catalogs
+# Multilanguage README
 
-```text
-te21    Terrorists/extremists registry v2.1
-te2     Terrorists/extremists legacy registry
-mvk     MVK freeze registry
-un      UN registry
-un-rus  UN registry, Russian version
-```
+[![en](https://img.shields.io/badge/lang-en-red.svg)](./README.md)
+[![ru](https://img.shields.io/badge/lang-ru-green.svg)](./README_RUS.md)
 
-For terrorists/extremists registry use `te21` by default. The legacy `te2`
-catalog is kept for compatibility with older API methods.
+## What It Does
 
-## Requirements
+- Downloads current Rosfinmonitoring registries through the Service Concentrator API.
+- Supports terrorists/extremists, UN and MVK registries.
+- Uses a client certificate through CryptoPro JCP/JTLS and HDImageStore.
+- Publishes file-based events between servers.
+- Imports updated registries into Zenith.
+- Runs Zenith AML/CFT mass checks, downloads XLSX reports and detects new matches.
+- Creates draft FES files for new matches.
+- Sends clear email and Telegram notifications.
+- Retries temporary Zenith failures and preserves permanent failures for investigation.
 
-- Java 17+
-- Maven
-- CryptoPro CSP/JCP installed
-- Client certificate with private key
-- Access to the required Rosfinmonitoring Service Concentrator methods
+## Architecture
 
-Official API base URL from the documentation:
+The recommended production deployment uses three independent scheduled stages:
 
 ```text
-https://portal.fedsfm.ru:8081/Services/fedsfm-service
+Server 1                         Server 2                         Server 3
+--------                         --------                         --------
+rfm-downloader                   zenith-processor                 zenith-processor
+download only                    IMPORT_ONLY                       CHECK_ONLY
+
+RegistryUpdated event  ------->  import to Zenith  ------------->  mass check
+                                 ImportCompleted event             report / analysis / FES drafts
+                                 import notification               check notification
 ```
 
-## Build
+`FULL` mode remains available for a single-server deployment. In the three-server scenario, Server 3 must use `CHECK_ONLY`, otherwise it would import the registry a second time.
 
-```powershell
-mvn clean package
-```
+## Modules
 
-The Maven build creates a thin application jar and copies dependencies to:
+| Module | Responsibility |
+| --- | --- |
+| `common` | Shared JSON support, event queues, retry/retention logic, processing summaries and notification contracts. |
+| `rfm-downloader` | Rosfinmonitoring authentication, registry version check, download, extraction, audit and `RegistryUpdated` publication. |
+| `zenith-processor` | Zenith import, mass check, report download/analysis, draft FES preparation and notifications. |
+| `distribution` | Assembles the deployable ZIP package with applications, dependencies, scripts and runtime configuration. |
+
+## Technology Stack
+
+- Java 21
+- Maven multi-module build
+- picocli command-line interface
+- Java `HttpClient`
+- Jackson for JSON and Java time types
+- SLF4J with Logback
+- Apache POI for Zenith XLSX reports
+- Jakarta Mail for SMTP notifications
+- Telegram Bot API through `curl.exe --resolve` for networks where the standard Telegram endpoint is unavailable
+- CryptoPro JCP and JTLS for client-certificate TLS
+- JUnit 5, Mockito and AssertJ for automated tests
+
+## Supported Registries
+
+| Code | Registry |
+| --- | --- |
+| `te21` | Current terrorists and extremists registry |
+| `te2` | Legacy terrorists and extremists registry |
+| `mvk` | MVK decisions registry |
+| `un` | UN registry |
+| `un-rus` | Russian-language UN registry |
+
+## Processing Modes
+
+| Mode | Purpose |
+| --- | --- |
+| `FULL` | Import, publish office events, run check, download report and prepare FES drafts. |
+| `IMPORT_ONLY` | Import a new registry into Zenith and publish `ZenithImportCompleted` events for checking servers. |
+| `CHECK_ONLY` | Consume `ZenithImportCompleted`, run the check, download/analyze the report and prepare FES drafts. |
+
+The processor supports `--once`, `--drain` and `--watch`. For scheduled servers, use `--drain` so all currently available events are processed as one batch.
+
+## Events and Retry
+
+Each queue has the following lifecycle:
 
 ```text
-target/libs/
+new -> processing -> processed
+                  -> retry  -> new
+                  -> failed
 ```
 
-## Configuration
+- Temporary connectivity errors, timeouts and retryable Zenith responses are moved to `retry` and retried later.
+- Invalid or non-retryable events are moved to `failed`.
+- Before processing, the queue keeps only the latest pending event for each registry. Older pending events of the same registry are removed.
+- Completed event files and summaries are retained for 30 days. Pending and retry events are not deleted automatically.
 
-Copy the template:
+## Notifications
+
+Notifications are optional and disabled by default.
+
+- `IMPORT_ONLY` sends one summary about registries successfully uploaded to Zenith.
+- `CHECK_ONLY` and `FULL` send one summary about check results, found persons and draft FES packages.
+- `Email.ImportTo` is optional. When configured, it receives import notifications; otherwise the normal `Email.To` list is used.
+- Telegram uses the configured `ChatIds` for every enabled Zenith notification.
+- When RFM launches Zenith itself, Zenith notifications can be suppressed so only one combined notification is delivered.
+
+## Important Configuration
+
+Runtime configuration is stored near the deployed scripts:
 
 ```text
-config.template.json -> config.json
+config/config.json
+config/zenith-config.json
 ```
 
-Set credentials and certificate serial:
+Do not commit real passwords, certificate identifiers, tokens, downloaded files, reports, logs or draft FES packages.
 
-```json
-{
-  "Credentials": {
-    "UserName": "YOUR_RFM_USERNAME",
-    "Password": "YOUR_RFM_PASSWORD"
-  },
-  "Certificate": {
-    "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER"
-  }
-}
-```
-
-Prefer environment variables for secrets:
+Environment variables supported by the application include:
 
 ```text
 RFM_USERNAME
 RFM_PASSWORD
 RFM_CERT_SERIAL
+RFM_KEY_PASSWORD
+ZENITH_PASSWORD
 ```
 
-`config.json`, private certificates, downloaded files, and logs must not be
-committed.
+### RFM certificate: JCP + JTLS
 
-## Run
+The downloader now uses `JCP / HDImageStore` instead of `JCSP / REGISTRY`.
+JavaCSP is not used by this implementation. A valid JCP license and a
+compatible private-key container with the RFM certificate are required.
+The user confirmed a successful run after importing a PFX through CSP
+to the Directory reader and making the container visible in JCP HDImageStore.
 
-Production `te21`:
+Set `Certificate.CryptoPro.KeyPasswordEnv` to `RFM_KEY_PASSWORD`.
+This is the **environment variable name, not the password**. The template
+assumes a password-protected container; omit KeyPasswordEnv for a container
+with an empty password.
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --prod --catalog te21 --out downloads
+```bat
+cd /d C:\RosFinMon
+set "RFM_KEY_PASSWORD=YOUR_CONTAINER_PASSWORD"
+call run-rfm.bat
 ```
 
-Test contour:
+Replace the placeholder with the container password, which may differ from
+the PFX password. Run both commands in the same cmd session. Windows Task
+Scheduler needs its own environment, container access and JCP license under
+the task account; it does not inherit this interactive session's variable.
+Do not commit PFX files or key containers.
 
-```powershell
-java -cp "target/rfm-client.jar;target/libs/*" org.ikozmin.rfm.Main --config config.json --test --catalog te21 --out downloads
+[Migration and troubleshooting guide (Russian)](rfm-downloader/instruction/JCP_MIGRATION.md).
+
+[Certificate installation and renewal runbook (Russian)](rfm-downloader/instruction/CERTIFICATE_SETUP.md):
+new server setup, PFX import, certificate replacement, scheduled-run
+verification and rollback.
+
+For `Zenith.BaseUrl`, specify the server base URL only, for example:
+
+```json
+"BaseUrl": "https://zenith-server"
 ```
 
-## Output
+The application adds `/zenith-object/api/...` itself.
+
+## Storage and Retention
 
 ```text
-downloads/
-  state.properties
-  audit/
-    1_RespTE.json
-    2_ReqTE.json
-  te21/
-    suspect_<date>_<id>.zip
+downloads/zenith-reports/   Zenith XLSX reports, retained indefinitely
+downloads/fes-packages/     Draft FES packages, retained indefinitely
+events/.../processed/       Completed events, retained for 30 days
+events/.../failed/          Failed events, retained for 30 days
+events/.../results/         Processing summaries, retained for 30 days
+logs/                       Logback archives, retained for 30 days
 ```
 
-`state.properties` stores the last known registry id, file path, download time,
-and SHA-256 checksum. It is used to skip repeated downloads of the same
-registry.
+Set `Retention.KeepDownloadedVersions` to `0` to retain downloaded Rosfinmonitoring registries indefinitely. A positive value enables a version limit. Audit retention is controlled separately by `Retention.KeepAuditDays`.
 
-## Access Procedure
+## Build and Distribution
 
-According to Rosfinmonitoring FAQ:
+Build all modules from the project root:
 
-1. Request access to test methods through the Personal Account support form.
-2. Successfully call the test methods.
-3. Save request/response envelopes.
-4. Submit a production access request with a ZIP archive of those envelopes.
-5. Use production methods after approval.
+```bat
+mvn clean package
+```
 
-The authentication request/response envelope is not required.
-
-## Implementation Notes
-
-This section records what was optimized and why, so future maintainers can see
-the intention behind the structure.
-
-### Step 1. Streaming Download, Atomic Writes, Response Checks
-
-Files:
+The distribution ZIP is created under:
 
 ```text
-src/main/java/org/ikozmin/rfm/model/DownloadedFile.java
-src/main/java/org/ikozmin/rfm/client/ResponseValidator.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/storage/RegistryStateStore.java
+target/distr/rfm-automation-<version>.zip
 ```
 
-What was changed:
+The package contains application JARs, dependencies, operational scripts and working configuration files.
 
-- Registry files are downloaded directly to a `.part` file instead of `byte[]`.
-- The `.part` file is moved to the final name only after a successful download.
-- `state.properties` is written through a temporary file and then moved over the
-  previous state file.
-- File responses are checked by HTTP status, size, and `Content-Type`.
-- Request timeouts are applied to API calls.
+## Operational Scripts
 
-Why:
+| Script | Purpose |
+| --- | --- |
+| `run-rfm.bat` | Run RFM download stage. |
+| `run-zenith-once.bat` | Process one Zenith event. |
+| `run-zenith-drain.bat` | Process all available Zenith events. |
+| `run-zenith-watch.bat` | Continuously poll a Zenith queue. |
 
-- Large ZIP/XML responses should not be kept fully in memory.
-- A failed process must not leave a final-looking partial registry file.
-- A failed state write must not corrupt the previous state.
-- HTML/JSON error pages must not be accepted as registry files.
+Example scheduled commands:
 
-### Step 2. CryptoPro TLS Settings and Contour Enum
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/model/Contour.java
-src/main/java/org/ikozmin/rfm/client/RfmEndpoints.java
-src/main/java/org/ikozmin/rfm/client/RfmHttpClientFactory.java
-src/main/java/org/ikozmin/rfm/config/AppConfig.java
-src/main/java/org/ikozmin/rfm/Main.java
-config.template.json
+```bat
+run-rfm.bat
+run-zenith-drain.bat --mode IMPORT_ONLY
+run-zenith-drain.bat --mode CHECK_ONLY
 ```
 
-What was changed:
+## Operational Notes
 
-- `boolean production` was replaced by `Contour.PROD` / `Contour.TEST`.
-- The official API URL with port `8081` is used.
-- CryptoPro/JTLS settings are configurable:
-  - SSL protocol/provider
-  - key manager algorithm/provider
-  - trust store type/provider
-  - trust manager algorithm/provider
-
-Why:
-
-- `Contour.PROD` and `Contour.TEST` are clearer than a boolean flag.
-- The official endpoint requires `:8081`.
-- CryptoPro deployments differ; TLS settings must be configurable without
-  recompiling.
-
-### Step 3. Secrets, PII, and Log Encoding
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/logging/Masking.java
-src/main/java/org/ikozmin/rfm/config/ConfigLoader.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/cert/CryptoProCertificateLoader.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/Main.java
-src/main/resources/logback.xml
-config.template.json
-.gitignore
-```
-
-What was changed:
-
-- Real credentials and certificate serials were removed from the template.
-- Logging masks username, token, serial number, and ids.
-- Certificate subject dumps were removed from INFO logs.
-- Log messages were normalized to English to avoid Windows console mojibake.
-- Logback package logger was aligned with `org.ikozmin.rfm`.
-
-Why:
-
-- Logs and templates must not expose secrets or personal data.
-- English log messages avoid encoding problems in batch files and consoles.
-- The logger package must match the actual Java package.
-
-### Step 4. Interfaces, Tests, Retry, Exit Codes, ID Resolver, SHA-256
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/client/RfmClient.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/client/RetryPolicy.java
-src/main/java/org/ikozmin/rfm/service/DownloadRequestIdResolver.java
-src/main/java/org/ikozmin/rfm/storage/Sha256.java
-src/main/java/org/ikozmin/rfm/storage/RegistryState.java
-src/main/java/org/ikozmin/rfm/storage/RegistryStateStore.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/ExitCode.java
-src/test/java/org/ikozmin/rfm/model/CatalogTypeTest.java
-src/test/java/org/ikozmin/rfm/client/RfmEndpointsTest.java
-src/test/java/org/ikozmin/rfm/service/DownloadRequestIdResolverTest.java
-pom.xml
-```
-
-What was changed:
-
-- `RfmClient` interface was introduced.
-- `RegistryUpdateService` depends on the interface, not the HTTP
-  implementation.
-- Retry policy was added for transient transport/API failures.
-- Exit codes were introduced for config, certificate, auth, API, and general
-  errors.
-- Download request id resolution was isolated in `DownloadRequestIdResolver`.
-- SHA-256 checksum is calculated for every downloaded registry file.
-- JUnit tests were added under `src/test/java`.
-
-Why:
-
-- Business logic can be tested without real network calls.
-- Transient network failures should not fail the whole run immediately.
-- Schedulers and scripts need meaningful exit codes.
-- `te2`, `te21`, `mvk`, and `un` may use different ids; that rule should be
-  explicit.
-- Checksums help detect corrupted or replaced files.
-- Tests guard endpoint construction and core decision rules.
-
-### Step 5. README, ZIP/XML Validation, Audit Envelopes
-
-Files:
-
-```text
-src/main/java/org/ikozmin/rfm/audit/AuditEnvelope.java
-src/main/java/org/ikozmin/rfm/audit/AuditWriter.java
-src/main/java/org/ikozmin/rfm/client/RfmApiClient.java
-src/main/java/org/ikozmin/rfm/service/RegistryFileValidator.java
-src/main/java/org/ikozmin/rfm/service/RegistryUpdateService.java
-src/main/java/org/ikozmin/rfm/Main.java
-README.md
-```
-
-What was changed:
-
-- JSON audit envelopes are saved for catalog responses and file requests.
-- Binary registry responses are not stored in audit JSON.
-- ZIP files are validated as ZIP archives.
-- UN XML files are validated as XML.
-- README documents build, run, output, access workflow, and implementation
-  decisions.
-
-Why:
-
-- Rosfinmonitoring production access workflow requires request/response
-  envelopes for test methods.
-- Binary responses should stay as files, not be embedded into JSON.
-- A successful HTTP response is not enough; the downloaded registry file must be
-  structurally valid.
-- Future maintainers need to understand why these pieces exist.
-
-## Troubleshooting
-
-### TLS `protocol_version`
-
-Check that the base URL contains port `8081`:
-
-```text
-https://portal.fedsfm.ru:8081/Services/fedsfm-service
-```
-
-### TLS `handshake_failure` or `Connection reset`
-
-Check:
-
-- certificate has a private key
-- certificate serial is correct
-- CryptoPro providers are loaded
-- `SslProtocol`: try `GostTLSv1.2` or `GostTLS`
-- key manager settings: try `GostX509/JTLS` or default provider
-- trust manager and trust store settings
-
-### Mojibake in console
-
-Use UTF-8 console:
-
-```powershell
-chcp 65001
-```
-
-### No production access
-
-If TLS succeeds but API returns authorization/access errors, complete the test
-method workflow and submit a production access request through the Personal
-Account support form.
+- Run only one instance of each stage against the same queue at a time.
+- Grant the scheduled-service accounts read/write access to the relevant network event directories.
+- Keep `config`, `downloads`, `events`, `data` and `logs` on persistent storage.
+- Review `failed` events and Zenith logs when an event does not complete.
+- Review every generated FES draft before any future delivery to Rosfinmonitoring.

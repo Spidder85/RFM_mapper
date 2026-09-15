@@ -1,0 +1,247 @@
+package org.ikozmin.rfm.client;
+
+import org.ikozmin.rfm.cert.CertificateKeyManager;
+import org.ikozmin.rfm.cert.ClientCertificate;
+import org.ikozmin.rfm.config.AppConfig;
+import org.ikozmin.rfm.exception.RfmCertificateException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509ExtendedKeyManager;
+import java.net.http.HttpClient;
+import java.security.KeyStore;
+import java.security.Provider;
+import java.security.SecureRandom;
+import java.security.Security;
+import java.time.Duration;
+import java.util.Arrays;
+
+/** Создает настроенный HTTP-клиент с TLS-контекстом и клиентским сертификатом. */
+public final class RfmHttpClientFactory {
+    private static final Logger log = LoggerFactory.getLogger(RfmHttpClientFactory.class);
+
+    private SSLContext sslContext;
+
+    public HttpClient create(ClientCertificate certificate, AppConfig.Certificate certificateConfig) {
+        if (certificateConfig.isUseCryptoPro()) {
+            return createCryptoProClient(certificate, certificateConfig.getCryptoPro());
+        }
+
+        return createDefaultClient(certificate);
+    }
+
+
+    private HttpClient createDefaultClient(ClientCertificate certificate) {
+        try {
+            log.info("Creating default Java TLS HTTP client");
+
+            this.sslContext = createSslContext(
+                certificate,
+                "TLS",
+                null,
+                null
+
+            );
+
+            return buildHttpClient(sslContext);
+        } catch (Exception e) {
+            throw new RfmCertificateException("Failed to create default TLS HTTP client", e);
+        }
+    }
+
+    private HttpClient createCryptoProClient(ClientCertificate certificate, AppConfig.CryptoPro cryptoPro) {
+        try {
+            String sslProtocol = valueOrDefault(
+                    cryptoPro == null ? null : cryptoPro.getSslProtocol(),
+                    "GostTLSv1.2"
+            );
+
+            String sslProvider = trimToNull(
+                    valueOrDefault(
+                            cryptoPro == null ? null : cryptoPro.getSslProvider(),
+                            "JTLS"
+                    )
+            );
+
+            log.info("Creating CryptoPro TLS HTTP client. protocol={}, provider={}",
+                sslProtocol,
+                sslProvider == null ? "<default>" : sslProvider);
+
+            this.sslContext = createSslContext(
+                certificate,
+                sslProtocol,
+                sslProvider,
+                cryptoPro
+            );
+
+            return buildHttpClient(sslContext);
+        } catch (Exception e) {
+            throw new RfmCertificateException("Failed to create CryptoPro/JTLS HTTP client", e);
+        }
+    }
+
+    private SSLContext createSslContext(
+            ClientCertificate certificate,
+            String sslProtocol,
+            String sslProvider,
+            AppConfig.CryptoPro cryptoPro
+    ) throws Exception {
+        KeyManagerFactory keyManagerFactory = createKeyManagerFactory(cryptoPro);
+
+        String passwordEnv = cryptoPro == null ? null : cryptoPro.getKeyPasswordEnv();
+        String password = passwordEnv == null || passwordEnv.isBlank() ? null : System.getenv(passwordEnv);
+        if (passwordEnv != null && !passwordEnv.isBlank() && password == null) {
+            throw new RfmCertificateException("Key password environment variable is not set: " + passwordEnv);
+        }
+        char[] keyPassword = password == null ? new char[0] : password.toCharArray();
+        try {
+            keyManagerFactory.init(certificate.getKeyStore(), keyPassword);
+        } finally {
+            Arrays.fill(keyPassword, '\0');
+        }
+
+        X509ExtendedKeyManager originalKeyManager = extractX509KeyManager(keyManagerFactory);
+        CertificateKeyManager fixedAliasKeyManager = new CertificateKeyManager(
+                originalKeyManager,
+                certificate.getAlias()
+        );
+
+        TrustManagerFactory trustManagerFactory = createTrustManagerFactory(cryptoPro);
+        trustManagerFactory.init(createTrustStore(cryptoPro));
+
+        SSLContext sslContext = sslProvider == null
+                ? SSLContext.getInstance(sslProtocol)
+                : SSLContext.getInstance(sslProtocol, sslProvider);
+
+        sslContext.init(
+                new KeyManager[]{fixedAliasKeyManager},
+                trustManagerFactory.getTrustManagers(),
+                SecureRandom.getInstanceStrong()
+        );
+
+        logInstalledSecurityProviders();
+
+        return sslContext;
+    }
+
+    private HttpClient buildHttpClient(SSLContext sslContext) {
+        return HttpClient.newBuilder()
+            .sslContext(sslContext)
+            .connectTimeout(Duration.ofSeconds(30))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+    }
+
+    private X509ExtendedKeyManager extractX509KeyManager(KeyManagerFactory keyManagerFactory) {
+        for (KeyManager keyManager : keyManagerFactory.getKeyManagers()) {
+            if (keyManager instanceof X509ExtendedKeyManager) {
+                return (X509ExtendedKeyManager) keyManager;
+            }
+        }
+
+        throw new RfmCertificateException("X509ExtendedKeyManager not found");
+    }
+
+    private void logInstalledSecurityProviders() {
+        StringBuilder builder = new StringBuilder();
+
+        for (Provider provider : Security.getProviders()) {
+            if (!builder.isEmpty()) {
+                builder.append(", ");
+            }
+
+            builder.append(provider.getName());
+        }
+
+        log.info("Installed security providers: {}", builder);
+    }
+
+    private static String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.trim().isEmpty() ? defaultValue : value.trim();
+    }
+
+    private static String trimToNull(String value) {
+        return value == null || value.trim().isEmpty() ? null : value.trim();
+    }
+
+    public SSLContext getSslContext() {
+        return sslContext;
+    }
+
+    private KeyManagerFactory createKeyManagerFactory(AppConfig.CryptoPro cryptoPro) throws Exception {
+        String algorithm = valueOrDefault(
+                cryptoPro == null ? null : cryptoPro.getKeyManagerAlgorithm(),
+                "GostX509"
+        );
+
+        String provider = trimToNull(
+                valueOrDefault(
+                        cryptoPro == null ? null : cryptoPro.getKeyManagerProvider(),
+                        "JTLS"
+                )
+        );
+
+        log.info("Creating KeyManagerFactory. algorithm={}, provider={}",
+                algorithm,
+                provider == null ? "<default>" : provider);
+
+        return provider == null
+                ? KeyManagerFactory.getInstance(algorithm)
+                : KeyManagerFactory.getInstance(algorithm, provider);
+    }
+
+    private TrustManagerFactory createTrustManagerFactory(AppConfig.CryptoPro cryptoPro) throws Exception {
+        String algorithm = valueOrDefault(
+                cryptoPro == null ? null : cryptoPro.getTrustManagerAlgorithm(),
+                "PKIX"
+        );
+
+        String provider = trimToNull(
+                cryptoPro == null ? null : cryptoPro.getTrustManagerProvider()
+        );
+
+        log.info("Creating TrustManagerFactory. algorithm={}, provider={}",
+                algorithm,
+                provider == null ? "<default>" : provider);
+
+        return provider == null
+                ? TrustManagerFactory.getInstance(algorithm)
+                : TrustManagerFactory.getInstance(algorithm, provider);
+    }
+
+    private KeyStore createTrustStore(AppConfig.CryptoPro cryptoPro) throws Exception {
+        String trustStoreType = trimToNull(
+                valueOrDefault(
+                        cryptoPro == null ? null : cryptoPro.getTrustStoreType(),
+                        "Windows-ROOT"
+                )
+        );
+
+        if (trustStoreType == null) {
+            log.info("Using default JVM trust store");
+            return null;
+        }
+
+        String trustStoreProvider = trimToNull(
+                valueOrDefault(
+                        cryptoPro == null ? null : cryptoPro.getTrustStoreProvider(),
+                        "SunMSCAPI"
+                )
+        );
+
+        log.info("Opening trust store. type={}, provider={}",
+                trustStoreType,
+                trustStoreProvider == null ? "<default>" : trustStoreProvider);
+
+        KeyStore trustStore = trustStoreProvider == null
+                ? KeyStore.getInstance(trustStoreType)
+                : KeyStore.getInstance(trustStoreType, trustStoreProvider);
+
+        trustStore.load(null, null);
+        return trustStore;
+    }
+}
