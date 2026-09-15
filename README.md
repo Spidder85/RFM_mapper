@@ -13,7 +13,7 @@ It is designed for unattended Windows Task Scheduler runs, normally once per hou
 
 - Downloads current Rosfinmonitoring registries through the Service Concentrator API.
 - Supports terrorists/extremists, UN and MVK registries.
-- Uses a client certificate, including CryptoPro CSP/JCP/JTLS installations.
+- Uses a client certificate through CryptoPro JCP/JTLS and HDImageStore.
 - Publishes file-based events between servers.
 - Imports updated registries into Zenith.
 - Runs Zenith AML/CFT mass checks, downloads XLSX reports and detects new matches.
@@ -58,7 +58,7 @@ RegistryUpdated event  ------->  import to Zenith  ------------->  mass check
 - Apache POI for Zenith XLSX reports
 - Jakarta Mail for SMTP notifications
 - Telegram Bot API through `curl.exe --resolve` for networks where the standard Telegram endpoint is unavailable
-- CryptoPro CSP, JCP and JTLS for client-certificate TLS
+- CryptoPro JCP and JTLS for client-certificate TLS
 - JUnit 5, Mockito and AssertJ for automated tests
 
 ## Supported Registries
@@ -123,8 +123,40 @@ Environment variables supported by the application include:
 RFM_USERNAME
 RFM_PASSWORD
 RFM_CERT_SERIAL
+RFM_KEY_PASSWORD
 ZENITH_PASSWORD
 ```
+
+### RFM certificate: JCP + JTLS
+
+The downloader now uses `JCP / HDImageStore` instead of `JCSP / REGISTRY`.
+JavaCSP is not used by this implementation. A valid JCP license and a
+compatible private-key container with the RFM certificate are required.
+The user confirmed a successful run after importing a PFX through CSP
+to the Directory reader and making the container visible in JCP HDImageStore.
+
+Set `Certificate.CryptoPro.KeyPasswordEnv` to `RFM_KEY_PASSWORD`.
+This is the **environment variable name, not the password**. The template
+assumes a password-protected container; omit KeyPasswordEnv for a container
+with an empty password.
+
+```bat
+cd /d C:\RosFinMon
+set "RFM_KEY_PASSWORD=YOUR_CONTAINER_PASSWORD"
+call run-rfm.bat
+```
+
+Replace the placeholder with the container password, which may differ from
+the PFX password. Run both commands in the same cmd session. Windows Task
+Scheduler needs its own environment, container access and JCP license under
+the task account; it does not inherit this interactive session's variable.
+Do not commit PFX files or key containers.
+
+[Migration and troubleshooting guide (Russian)](rfm-downloader/instruction/JCP_MIGRATION.md).
+
+[Certificate installation and renewal runbook (Russian)](rfm-downloader/instruction/CERTIFICATE_SETUP.md):
+new server setup, PFX import, certificate replacement, scheduled-run
+verification and rollback.
 
 For `Zenith.BaseUrl`, specify the server base URL only, for example:
 

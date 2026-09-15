@@ -38,6 +38,10 @@
             <includes>
                 <include>*.jar</include>
             </includes>
+            <excludes>
+                <exclude>JCSP*.jar</exclude>
+                <exclude>sspiSSL*.jar</exclude>
+            </excludes>
         </fileSet>
 
         <fileSet>

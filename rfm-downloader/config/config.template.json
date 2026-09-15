@@ -5,7 +5,21 @@
   },
   "Certificate": {
     "SerialNumber": "YOUR_CERTIFICATE_SERIAL_NUMBER",
-    "UseCryptoPro": true
+    "UseCryptoPro": true,
+    "CryptoPro": {
+      "ProviderClasses": [
+        "ru.CryptoPro.JCP.JCP",
+        "ru.CryptoPro.Crypto.CryptoProvider",
+        "ru.CryptoPro.ssl.Provider"
+      ],
+      "KeyStoreProvider": "JCP",
+      "KeyStoreType": "HDImageStore",
+      "KeyPasswordEnv": "RFM_KEY_PASSWORD",
+      "SslProtocol": "GostTLSv1.2",
+      "SslProvider": "JTLS",
+      "KeyManagerAlgorithm": "GostX509",
+      "KeyManagerProvider": "JTLS"
+    }
   },
   "DefaultCatalog": "te21",
   "Catalogs": [

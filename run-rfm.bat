@@ -11,10 +11,9 @@ if not exist "%JAVA_HOME%\bin\java.exe" (
   exit /b 2
 )
 
-set PATH=C:\Program Files\Crypto Pro\CSP;%JAVA_HOME%\bin;%PATH%
+set "PATH=%JAVA_HOME%\bin;%PATH%"
 
 "%JAVA_HOME%\bin\java.exe" ^
-  -Djava.library.path="C:\Program Files\Crypto Pro\CSP" ^
   -Dcom.sun.net.ssl.checkRevocation=false ^
   -Djavax.net.ssl.trustStore=NONE ^
   -Djavax.net.ssl.trustStoreType=Windows-ROOT ^

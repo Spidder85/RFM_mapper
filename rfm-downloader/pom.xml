@@ -38,15 +38,6 @@
             <version>${logback.version}</version>
         </dependency>
 
-        <!-- JCSP -->
-        <dependency>
-            <groupId>ru.cryptopro.jcp</groupId>
-            <artifactId>jcp-jscp</artifactId>
-            <version>5.0.49800-A</version>
-            <scope>system</scope>
-            <systemPath>${project.basedir}/libs/JCSP.jar</systemPath>
-        </dependency>
-
         <!-- JCP -->
         <dependency>
             <groupId>ru.cryptopro.jcp</groupId>

@@ -176,6 +176,13 @@ public final class AppConfig {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static final class CryptoPro {
+        @JsonProperty("KeyPasswordEnv")
+        private String keyPasswordEnv;
+
+        public String getKeyPasswordEnv() {
+            return keyPasswordEnv;
+        }
+
         @JsonProperty("ProviderClasses")
         private String[] providerClasses;
 
