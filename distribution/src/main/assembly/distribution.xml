@@ -7,6 +7,16 @@
     </formats>
     <includeBaseDirectory>false</includeBaseDirectory>
 
+    <files>
+        <!-- Always package an empty template, never the local runtime password. -->
+        <file>
+            <source>${project.parent.basedir}/rfm-downloader/config/rfm-key-password.template</source>
+            <outputDirectory>config</outputDirectory>
+            <destName>rfm-key-password.local</destName>
+            <filtered>false</filtered>
+        </file>
+    </files>
+
     <fileSets>
         <fileSet>
             <directory>${project.parent.basedir}/rfm-downloader/target</directory>

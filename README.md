@@ -154,6 +154,19 @@ Do not commit PFX files or key containers.
 
 [Migration and troubleshooting guide (Russian)](rfm-downloader/instruction/JCP_MIGRATION.md).
 
+For scheduled runs, create `C:\RosFinMon\config\rfm-key-password.local`
+on the server. Its first line must contain only the container password,
+without quotes or a `set` command; use UTF-8 without BOM.
+`run-rfm.bat` reads it when `RFM_KEY_PASSWORD` is not already set.
+An existing empty or unreadable file stops the script.
+The file contains plaintext: restrict access to the task account and
+administrators. The runtime secret is ignored by Git (`*.local`). The ZIP
+contains an empty config/rfm-key-password.local generated from
+rfm-downloader/config/rfm-key-password.template. Fill it before first use;
+do not overwrite an existing password file with the empty one during upgrades.
+Schedule the current
+`run-rfm.bat`, not a legacy `run.bat`.
+
 [Certificate installation and renewal runbook (Russian)](rfm-downloader/instruction/CERTIFICATE_SETUP.md):
 new server setup, PFX import, certificate replacement, scheduled-run
 verification and rollback.
