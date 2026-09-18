@@ -18,7 +18,6 @@ import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.time.Duration;
-import java.util.Arrays;
 
 /** Создает настроенный HTTP-клиент с TLS-контекстом и клиентским сертификатом. */
 public final class RfmHttpClientFactory {
@@ -92,17 +91,7 @@ public final class RfmHttpClientFactory {
     ) throws Exception {
         KeyManagerFactory keyManagerFactory = createKeyManagerFactory(cryptoPro);
 
-        String passwordEnv = cryptoPro == null ? null : cryptoPro.getKeyPasswordEnv();
-        String password = passwordEnv == null || passwordEnv.isBlank() ? null : System.getenv(passwordEnv);
-        if (passwordEnv != null && !passwordEnv.isBlank() && password == null) {
-            throw new RfmCertificateException("Key password environment variable is not set: " + passwordEnv);
-        }
-        char[] keyPassword = password == null ? new char[0] : password.toCharArray();
-        try {
-            keyManagerFactory.init(certificate.getKeyStore(), keyPassword);
-        } finally {
-            Arrays.fill(keyPassword, '\0');
-        }
+        keyManagerFactory.init(certificate.getKeyStore(), new char[0]);
 
         X509ExtendedKeyManager originalKeyManager = extractX509KeyManager(keyManagerFactory);
         CertificateKeyManager fixedAliasKeyManager = new CertificateKeyManager(

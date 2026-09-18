@@ -27,20 +27,15 @@ public final class CryptoProCertificateLoader {
 
             String keyStoreType = valueOrDefault(
                 cryptoPro == null ? null : cryptoPro.getKeyStoreType(),
-                "HDImageStore"
+                "REGISTRY"
             );
 
             String keyStoreProvider = trimToNull(
                 valueOrDefault(
                     cryptoPro == null ? null : cryptoPro.getKeyStoreProvider(),
-                    "JCP"
+                    "JCSP"
                 )
             );
-
-            if (!"JCP".equals(keyStoreProvider) || "REGISTRY".equalsIgnoreCase(keyStoreType)) {
-                throw new RfmCertificateException("JCP mode requires KeyStoreProvider=JCP and a JCP key store "
-                        + "(normally HDImageStore). Copy the CSP key container with its certificate to JCP first.");
-            }
 
             log.info("Loading CryptoPro certificate. keyStoreType={}, keyStoreProvider={}, serial={}",
                 keyStoreType,
@@ -105,9 +100,7 @@ public final class CryptoProCertificateLoader {
             }
         }
         
-        throw new RfmCertificateException("Certificate not found in JCP key store. Import the private-key container "
-                + "AND certificate into HDImageStore for the Windows account running this application. Serial: "
-                + Masking.serial(serialNumber));
+        throw new RfmCertificateException("Certificate not found in CryptoPro key store. Serial: " + Masking.serial(serialNumber));
     }
 
     private static String valueOrDefault(String value, String defaultValue) {
