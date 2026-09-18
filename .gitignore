@@ -193,6 +193,7 @@ logs/
 # папка загрузок
 downloads/
 target/
+/target/*
 # пакпка событий
 events/
 /data/
