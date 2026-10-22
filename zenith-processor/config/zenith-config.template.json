@@ -54,7 +54,7 @@
         "OutputDirectory": "downloads/zenith-reports/te21",
         "FileNamePrefix": "T38"
       },
-      "un": {
+      "un-rus": {
         "Enabled": true,
         "OutDocType": 10217,
         "Filter": true,

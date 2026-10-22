@@ -10,15 +10,15 @@
   "DefaultCatalog": "te21",
   "Catalogs": [
     "te21",
-    "un",
+    "un-rus",
     "mvk"
   ],
   "UseTestContour": false,
   "OutputDirectory": {
-    "Path": "\\\\t-cent\\Zen-co\\terrlist\\test\\",
+    "Path": "\\\\t-cent\\Zen-co\\terrlist\\",
     "Catalogs": {
       "te21": "терр_экстр",
-      "un": "Санкционные_списки_ООН",
+      "un-rus": "Санкционные_списки_ООН",
       "mvk": "Перечни_решМКО(МВК)"
     }
   },
